@@ -1,12 +1,12 @@
 <h1 align="center">LoRANN</h1>
 <div align="center">
-Approximate Nearest Neighbor search library implementing reduced-rank regression, a technique that enables extremely fast queries, tiny memory usage, and rapid indexing on modern high-dimensional embedding datasets.
+Approximate Nearest Neighbor search library implementing <a href="https://arxiv.org/abs/2410.18926">reduced-rank regression</a>, a technique that enables extremely fast queries, tiny memory usage, and rapid indexing on modern high-dimensional embedding datasets.
 </div>
 <br/>
 
 <div align="center">
     <a href="https://github.com/ejaasaari/lorann/actions/workflows/build.yml"><img src="https://github.com/gvinciguerra/PyGM/actions/workflows/build.yml/badge.svg" alt="Build status" /></a>
-    <a href="https://ejaasaari.github.io/lorann"><img src="https://img.shields.io/badge/Paper-NeurIPS%3A_LoRANN-blue" alt="Paper" /></a>
+    <a href="https://arxiv.org/abs/2410.18926"><img src="https://img.shields.io/badge/Paper-NeurIPS%3A_LoRANN-blue" alt="Paper" /></a>
     <a href="https://ejaasaari.github.io/lorann"><img src="https://img.shields.io/badge/api-reference-blue.svg" alt="Documentation" /></a>
     <a href="https://github.com/ejaasaari/lorann/blob/master/LICENSE"><img src="https://img.shields.io/github/license/ejaasaari/lorann" alt="License" /></a>
     <a href="https://github.com/ejaasaari/lorann/stargazers"><img src="https://img.shields.io/github/stars/ejaasaari/lorann" alt="GitHub stars" /></a>

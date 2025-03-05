@@ -3,10 +3,16 @@
 #include <iostream>
 #include <sstream>
 #include <string>
-
+#include <random>
 #include "lorann.h"
 
 typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> RowMatrix;
+std::string attributes[999994];
+const int n_attributes = 10;
+std::string attribute_strings[n_attributes] = {"red", "green", "blue", "yellow", "orange", "purple", "black", "white", "pink", "brown"};
+std::random_device rd; // obtain a random number from hardware
+std::mt19937 gen(rd()); // seed the generator
+std::uniform_int_distribution<> distr(0, n_attributes); // define the range
 
 RowMatrix load_vectors() {
   std::ios::sync_with_stdio(false);
@@ -33,6 +39,8 @@ RowMatrix load_vectors() {
 
     int j = 0;
     float value;
+    std::string random_attribute = attribute_strings[distr(gen)];
+    attributes[i] = random_attribute;
     while (iss >> value) {
       ret(i, j) = value;
       ++j;
@@ -40,15 +48,18 @@ RowMatrix load_vectors() {
     ++i;
   }
 
-  return ret;
+  return ret.topRows(100000);
 }
 
 int main() {
   std::cout << "Loading data..." << std::endl;
+  std::cout << attribute_strings[0] << std::endl;
   RowMatrix X = load_vectors();
   RowMatrix Q = X.topRows(1000);
+  std::cout << attributes[30000] << std::endl;
 
-  const int k = 10;
+
+  const int k = 15;
 
   const int n_clusters = 1024;
   const int global_dim = 256;
@@ -65,13 +76,18 @@ int main() {
   index.build();
   
   Eigen::VectorXi indices(k), indices_exact(k);
-
+  std::cout << "test 1" << std::endl;
+  std::cout << Q.row(1) << std::endl;
+  std::cout << "test 2" << std::endl;
+  std::cout << Q.row(1).data() << std::endl;
+  std::cout << "----" << std::endl;
+  std::cout << Q.row(0).data() << std::endl;
   std::cout << "Querying the index using exact search..." << std::endl;
-  index.exact_search(Q.row(0).data(), k, indices_exact.data());
+  index.exact_search(Q.row(4).data(), k, indices_exact.data());
   std::cout << indices_exact.transpose() << std::endl;
 
   std::cout << "Querying the index using approximate search..." << std::endl;
-  index.search(Q.row(0).data(), k, clusters_to_search, points_to_rerank, indices.data());
+  index.search(Q.row(4).data(), k, clusters_to_search, points_to_rerank, indices.data());
   std::cout << indices.transpose() << std::endl;
 
   std::cout << "Saving the index to disk..." << std::endl;

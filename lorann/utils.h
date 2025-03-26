@@ -8,6 +8,7 @@
 #include <rsvd/RandomizedSvd.hpp>
 #include <unordered_set>
 #include <vector>
+#include <set>
 
 #include "miniselect/pdqselect.h"
 
@@ -480,5 +481,41 @@ static inline Eigen::MatrixXf compute_V(const Eigen::MatrixXf &X, const int rank
     return V;
   }
 }
+
+template <typename T>
+std::vector<std::vector<T>> split_vector(const std::vector<T>& input, size_t n) {
+    std::vector<std::vector<T>> result;
+    size_t total_size = input.size();
+    // If n is 0 or greater than the size of the vector, return an empty result.
+    if (n == 0 || total_size == 0) {
+        return result;
+    }
+    // Determine the size of each subvector
+    size_t subvector_size = total_size / n;
+    size_t remainder = total_size % n;  // Number of subvectors that will need an extra element
+
+    size_t start = 0;
+    for (size_t i = 0; i < n; ++i) {
+        // Calculate the size of the current subvector
+        size_t current_subvector_size = subvector_size + (i < remainder ? 1 : 0);
+        // Create a subvector and add it to the result
+        std::vector<T> subvector(input.begin() + start, input.begin() + start + current_subvector_size);
+        result.push_back(subvector);
+        // Update the start index for the next subvector
+        start += current_subvector_size;
+    }
+    return result;
+}
+
+struct set_hash {
+  template <typename T>
+  size_t operator()(const std::set<T>& s) const {
+      size_t hash_value = 0;
+      for (const auto& elem : s) {
+          hash_value ^= std::hash<T>{}(elem) + 0x9e3779b9 + (hash_value << 6) + (hash_value >> 2);
+      }
+      return hash_value;
+  }
+};
 
 }  // namespace Lorann

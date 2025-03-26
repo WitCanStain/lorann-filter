@@ -16,13 +16,15 @@ namespace Lorann {
 
 class LorannBase {
  public:
-  LorannBase(float *data, int m, int d, int n_clusters, int global_dim, int rank, int train_size,
+  LorannBase(float *data, int m, int d, int n_clusters, int global_dim, std::vector<std::string>& attributes, std::vector<std::string>& attribute_strings, int rank, int train_size,
              bool euclidean, bool balanced)
       : _data(data),
         _n_samples(m),
         _dim(d),
         _n_clusters(n_clusters),
         _global_dim(global_dim <= 0 ? d : std::min(global_dim, d)),
+        _attributes(attributes),
+        _attribute_strings(attribute_strings),
         _max_rank(std::min(rank, d)),
         _train_size(train_size),
         _euclidean(euclidean),
@@ -30,6 +32,11 @@ class LorannBase {
     if (d < 64) {
       throw std::invalid_argument(
           "LoRANN is meant for high-dimensional data: the dimensionality should be at least 64.");
+    }
+
+    if (m != attributes.size()) {
+      throw std::invalid_argument(
+          "Attributes have a different number of elements than the number of samples!");
     }
 
     LORANN_ENSURE_POSITIVE(m);
@@ -104,11 +111,11 @@ class LorannBase {
    * slightly increase the recall, especially if no exact re-ranking is used in the query phase.
    * @param num_threads Number of CPU threads to use (set to -1 to use all cores)
    */
-  void build(const bool approximate = true, int num_threads = -1) {
-    build(_data, _n_samples, approximate, num_threads);
+  void build(const bool approximate = true, int num_threads = -1, int n_attribute_partitions=10) {
+    build(_data, _n_samples, n_attribute_partitions, approximate, num_threads);
   }
 
-  virtual void build(const float *query_data, const int query_n, const bool approximate,
+  virtual void build(const float *query_data, const int query_n, const int n_attribute_partitions, const bool approximate,
                      int num_threads) {}
 
   virtual void search(const float *data, const int k, const int clusters_to_search,
@@ -292,6 +299,8 @@ class LorannBase {
   int _train_size;
   bool _euclidean;
   bool _balanced;
+  std::vector<std::string> _attributes;
+  std::vector<std::string> _attribute_strings;
 
   /* vector of points assigned to a cluster, for each cluster */
   std::vector<std::vector<int>> _cluster_map;

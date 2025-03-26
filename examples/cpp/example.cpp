@@ -5,24 +5,24 @@
 #include <string>
 #include <random>
 #include "lorann.h"
+#include <vector>
 
 typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> RowMatrix;
-std::string attributes[999994];
+std::vector<std::string> attributes;
 const int n_attributes = 10;
-std::string attribute_strings[n_attributes] = {"red", "green", "blue", "yellow", "orange", "purple", "black", "white", "pink", "brown"};
+std::vector<std::string> attribute_strings = {"red", "green", "blue", "yellow", "orange", "purple", "black", "white", "pink", "brown"};
 std::random_device rd; // obtain a random number from hardware
 std::mt19937 gen(rd()); // seed the generator
-std::uniform_int_distribution<> distr(0, n_attributes); // define the range
+std::uniform_int_distribution<> distr(0, n_attributes-1); // define the range
 
 RowMatrix load_vectors() {
   std::ios::sync_with_stdio(false);
-
+  attributes.reserve(999994);
   std::ifstream fin("wiki-news-300d-1M.vec");
   if (!fin.is_open()) {
     throw std::runtime_error(
         "Could not open wiki-news-300d-1M.vec. Run `make prepare-data` first.");
   }
-
   std::string line;
   std::getline(fin, line);
   std::istringstream header(line);
@@ -36,26 +36,29 @@ RowMatrix load_vectors() {
     std::istringstream iss(line);
     std::string token;
     iss >> token;
-
     int j = 0;
     float value;
-    std::string random_attribute = attribute_strings[distr(gen)];
-    attributes[i] = random_attribute;
+    int rand_int = distr(gen);
+    std::string random_attribute = attribute_strings[rand_int];
+    // std::cout << "random attribute: " << random_attribute << std::endl;
+    attributes.push_back(random_attribute);
     while (iss >> value) {
       ret(i, j) = value;
       ++j;
     }
     ++i;
   }
+  std::cout << "test 3 len: " << i << std::endl;
 
   return ret.topRows(100000);
 }
 
 int main() {
   std::cout << "Loading data..." << std::endl;
-  std::cout << attribute_strings[0] << std::endl;
   RowMatrix X = load_vectors();
   RowMatrix Q = X.topRows(1000);
+  std::cout <<  "X cols: " << X.cols() << std::endl;
+  std::cout <<  "Q cols: " << Q.cols() << std::endl;
   std::cout << attributes[30000] << std::endl;
 
 
@@ -71,23 +74,21 @@ int main() {
   const int points_to_rerank = 2000;
 
   std::cout << "Building the index..." << std::endl;
-  Lorann::Lorann<Lorann::SQ4Quantizer> index(X.data(), X.rows(), X.cols(), n_clusters, global_dim,
-                                             rank, train_size, euclidean);
-  index.build();
+  std::vector<std::string> sliced_attributes(attributes.begin(), attributes.begin()+X.rows());
+  std::cout << "sliced attributes size: " << sliced_attributes.size() << std::endl;
+  Lorann::Lorann<Lorann::SQ4Quantizer> index(X.data(), X.rows(), X.cols(), n_clusters, global_dim, sliced_attributes, attribute_strings,
+                                             rank, train_size, euclidean, false);
+  index.build(true, -1, 10);
   
   Eigen::VectorXi indices(k), indices_exact(k);
-  std::cout << "test 1" << std::endl;
-  std::cout << Q.row(1) << std::endl;
-  std::cout << "test 2" << std::endl;
-  std::cout << Q.row(1).data() << std::endl;
   std::cout << "----" << std::endl;
   std::cout << Q.row(0).data() << std::endl;
   std::cout << "Querying the index using exact search..." << std::endl;
-  index.exact_search(Q.row(4).data(), k, indices_exact.data());
+  index.exact_search(Q.row(0).data(), k, indices_exact.data());
   std::cout << indices_exact.transpose() << std::endl;
 
   std::cout << "Querying the index using approximate search..." << std::endl;
-  index.search(Q.row(4).data(), k, clusters_to_search, points_to_rerank, indices.data());
+  index.search(Q.row(0).data(), k, clusters_to_search, points_to_rerank, indices.data());
   std::cout << indices.transpose() << std::endl;
 
   std::cout << "Saving the index to disk..." << std::endl;

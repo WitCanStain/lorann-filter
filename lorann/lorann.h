@@ -48,9 +48,9 @@ class Lorann : public LorannBase {
    * dissimilarity measure. Defaults to false.
    * @param balanced Whether to use balanced clustering. Defaults to false.
    */
-  explicit Lorann(float *data, int m, int d, int n_clusters, int global_dim, int rank = 32,
-                  int train_size = 5, bool euclidean = false, bool balanced = false)
-      : LorannBase(data, m, d, n_clusters, global_dim, rank + 1, train_size, euclidean, balanced) {
+  explicit Lorann(float *data, int m, int d, int n_clusters, int global_dim, std::vector<std::string>& attributes, std::vector<std::string>& attribute_strings, int rank = 32,
+                  int train_size = 5, bool euclidean = false, bool balanced = false) //, std::vector<std::string>* attributes, std::vector<std::string>* attribute_strings
+      : LorannBase(data, m, d, n_clusters, global_dim, attributes, attribute_strings, rank + 1, train_size, euclidean, balanced) {
     if (!(rank == 16 || rank == 32 || rank == 64)) {
       throw std::invalid_argument("rank must be 16, 32, or 64");
     }
@@ -169,7 +169,7 @@ class Lorann : public LorannBase {
    * slightly increase the recall, especially if no exact re-ranking is used in the query phase.
    * @param num_threads Number of CPU threads to use (set to -1 to use all cores)
    */
-  void build(const float *query_data, const int query_n, const bool approximate = true,
+  void build(const float *query_data, const int query_n, int n_attribute_partitions=-1, const bool approximate = true,
              int num_threads = -1) override {
     LORANN_ENSURE_POSITIVE(query_n);
 
@@ -178,6 +178,25 @@ class Lorann : public LorannBase {
       num_threads = omp_get_max_threads();
     }
 #endif
+
+    std::unordered_map<std::set<std::string>, std::vector<int>, set_hash> attribute_data_map;
+
+    if (n_attribute_partitions >= 0) {
+      std::vector<std::vector<std::string>> attr_subvecs = split_vector(_attribute_strings, n_attribute_partitions);
+      std::vector<std::set<std::string>> attribute_partitions;
+      for (const auto& attr_subvec : attr_subvecs) {
+        std::set<std::string> attribute_subvec_set(attr_subvec.begin(), attr_subvec.end());
+        std::vector<int> attribute_data_vec;
+        for (int i = 0; i<_n_samples;i++) {
+          if (attribute_subvec_set.count(_attributes[i]) != 0) {
+            attribute_data_vec.push_back(i);
+          }
+        }  
+        attribute_data_map.insert({attribute_subvec_set, attribute_data_vec});
+        attribute_partitions.push_back(attribute_subvec_set);
+      }
+      
+    }
 
     Eigen::Map<RowMatrix> train_mat(_data, _n_samples, _dim);
     Eigen::Map<const RowMatrix> query_mat(query_data, query_n, _dim);

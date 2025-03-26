@@ -164,3 +164,8 @@ docs/_build
 docs/_templates
 doxygen
 *.hdf5
+
+/.vscode
+/examples/cpp/index.bin
+/examples/cpp/wiki-news-300d-1M.vec
+/examples/cpp/example

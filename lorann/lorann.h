@@ -73,7 +73,7 @@ class Lorann : public LorannBase {
    * @param dist_out The (optional) distance output array of length k
    */
   void search(const float *data, const int k, const int clusters_to_search,
-              const int points_to_rerank, int *idx_out, float *dist_out = nullptr) const override {
+              const int points_to_rerank, int *idx_out, std::set<std::string>& filter_attributes, float *dist_out = nullptr) const override {
     ColVector scaled_query;
     ColVector transformed_query;
     Eigen::Map<const Eigen::VectorXf> data_vec(data, _dim);
@@ -178,25 +178,42 @@ class Lorann : public LorannBase {
       num_threads = omp_get_max_threads();
     }
 #endif
-
-    std::unordered_map<std::set<std::string>, std::vector<int>, set_hash> attribute_data_map;
-
+    
+    std::vector<std::set<std::string>> attribute_partition_sets;
     if (n_attribute_partitions >= 0) {
-      std::vector<std::vector<std::string>> attr_subvecs = split_vector(_attribute_strings, n_attribute_partitions);
-      std::vector<std::set<std::string>> attribute_partitions;
+      std::vector<std::vector<std::string>> attr_subvecs = split_vector(_attribute_strings, n_attribute_partitions); // partition the attributes into groups of attributes
       for (const auto& attr_subvec : attr_subvecs) {
-        std::set<std::string> attribute_subvec_set(attr_subvec.begin(), attr_subvec.end());
-        std::vector<int> attribute_data_vec;
-        for (int i = 0; i<_n_samples;i++) {
-          if (attribute_subvec_set.count(_attributes[i]) != 0) {
-            attribute_data_vec.push_back(i);
+        std::set<std::string> attribute_subvec_set(attr_subvec.begin(), attr_subvec.end()); // turn the attribute partition vector into a set to eliminate duplicates and enable using it as a key for map
+        std::vector<int> attribute_data_idx_vec; // vector of indexes of datapoints that have at least one of the attributes in attribute_subvec_set
+        for (int i = 0; i<_n_samples; i++) {
+          if (attribute_subvec_set.count(_attributes[i]) != 0) { // for each datapoint, check if it has this attribute
+            attribute_data_idx_vec.push_back(i);
           }
         }  
-        attribute_data_map.insert({attribute_subvec_set, attribute_data_vec});
-        attribute_partitions.push_back(attribute_subvec_set);
+        _attribute_data_map.insert({attribute_subvec_set, attribute_data_idx_vec});
+        attribute_partition_sets.push_back(attribute_subvec_set);
       }
-      
     }
+
+    /* Some printouts to make sure data indexes were stored correctly */
+  //   for (int i = 0; i < attribute_partition_sets.size(); i++) {
+  //     std::set<std::string> partition = attribute_partition_sets[i];
+  //     std::cout << "partition " << i << ": ";
+  //     for (auto& attribute: partition) {
+  //       std::cout << attribute << ' ';
+  //     }
+  //     std::cout << std::endl;
+  //   }
+  //   std::vector<std::string> attribute_string_vec = {"brown"};
+  //   std::set<std::string> attribute_key(attribute_string_vec.begin(), attribute_string_vec.end());
+  //   std::vector<int> colour_partition_data_idxs = _attribute_data_map[attribute_key];
+  //   std::cout << "colour_partition_data_idxs size: " << colour_partition_data_idxs.size() << std::endl;
+  //   std::cout << "colour partition indexes:" << std::endl;
+  //   for(int i=0; i < 10; i++){
+  //     std::cout << colour_partition_data_idxs[i] << " - ";
+  //     std::cout << "corresponding attribute: " << _attributes[colour_partition_data_idxs[i]] << "|";
+  //  }
+
 
     Eigen::Map<RowMatrix> train_mat(_data, _n_samples, _dim);
     Eigen::Map<const RowMatrix> query_mat(query_data, query_n, _dim);

@@ -63,7 +63,7 @@ int main() {
 
 
   const int k = 15;
-
+  const int n_attr_partitions = 10;
   const int n_clusters = 1024;
   const int global_dim = 256;
   const int rank = 32;
@@ -78,17 +78,19 @@ int main() {
   std::cout << "sliced attributes size: " << sliced_attributes.size() << std::endl;
   Lorann::Lorann<Lorann::SQ4Quantizer> index(X.data(), X.rows(), X.cols(), n_clusters, global_dim, sliced_attributes, attribute_strings,
                                              rank, train_size, euclidean, false);
-  index.build(true, -1, 10);
+  index.build(true, -1, n_attr_partitions);
   
+  std::set<std::string> filter_attributes = {"brown"};
+
   Eigen::VectorXi indices(k), indices_exact(k);
   std::cout << "----" << std::endl;
   std::cout << Q.row(0).data() << std::endl;
   std::cout << "Querying the index using exact search..." << std::endl;
-  index.exact_search(Q.row(0).data(), k, indices_exact.data());
+  index.exact_search(Q.row(0).data(), k, indices_exact.data(), filter_attributes, nullptr);
   std::cout << indices_exact.transpose() << std::endl;
 
   std::cout << "Querying the index using approximate search..." << std::endl;
-  index.search(Q.row(0).data(), k, clusters_to_search, points_to_rerank, indices.data());
+  index.search(Q.row(0).data(), k, clusters_to_search, points_to_rerank, indices.data(), filter_attributes);
   std::cout << indices.transpose() << std::endl;
 
   std::cout << "Saving the index to disk..." << std::endl;

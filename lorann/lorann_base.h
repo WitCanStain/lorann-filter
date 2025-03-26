@@ -119,7 +119,7 @@ class LorannBase {
                      int num_threads) {}
 
   virtual void search(const float *data, const int k, const int clusters_to_search,
-                      const int points_to_rerank, int *idx_out, float *dist_out = nullptr) const {}
+                      const int points_to_rerank, int *idx_out, std::set<std::string>& filter_attributes, float *dist_out = nullptr) const {}
 
   virtual ~LorannBase() {}
 
@@ -131,10 +131,16 @@ class LorannBase {
    * @param out The index output array of length k
    * @param dist_out The (optional) distance output array of length k
    */
-  void exact_search(const float *q, int k, int *out, float *dist_out = nullptr) const {
+  void exact_search(const float *q, int k, int *out, std::set<std::string>& filter_attributes, float *dist_out = nullptr) const {
+    
+    float *data_ptr;
+    if (_attribute_data_map.find(filter_attributes) != 0) {
+      
+    } else {
+      data_ptr = _data;
+    }
+    
     Vector dist(_n_samples);
-
-    const float *data_ptr = _data;
     if (_euclidean) {
       for (int i = 0; i < _n_samples; ++i) {
         dist[i] = squared_euclidean(q, data_ptr + i * _dim, _dim);
@@ -301,6 +307,7 @@ class LorannBase {
   bool _balanced;
   std::vector<std::string> _attributes;
   std::vector<std::string> _attribute_strings;
+  std::unordered_map<std::set<std::string>, std::vector<int>, set_hash> _attribute_data_map;
 
   /* vector of points assigned to a cluster, for each cluster */
   std::vector<std::vector<int>> _cluster_map;

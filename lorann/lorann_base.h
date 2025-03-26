@@ -132,14 +132,14 @@ class LorannBase {
    * @param dist_out The (optional) distance output array of length k
    */
   void exact_search(const float *q, int k, int *out, std::set<std::string>& filter_attributes, float *dist_out = nullptr) const {
-    
-    float *data_ptr;
-    if (_attribute_data_map.find(filter_attributes) != 0) {
+    float *data_ptr = _data;
+    // float *data_ptr;
+    // if (_attribute_data_map.find(filter_attributes) != 0) {
       
-    } else {
-      data_ptr = _data;
-    }
-    
+    // } else {
+    //   data_ptr = _data;
+    // }
+
     Vector dist(_n_samples);
     if (_euclidean) {
       for (int i = 0; i < _n_samples; ++i) {
@@ -246,7 +246,7 @@ class LorannBase {
 
   std::vector<std::vector<int>> clustering(KMeans &global_clustering, const float *data,
                                            const int n, const float *train_data, const int train_n,
-                                           const bool approximate, int num_threads) {
+                                           const bool approximate, int num_threads, std::vector<std::set<std::string>> &attribute_partition_sets) {
     const int to_sample = SAMPLED_POINTS_PER_CLUSTER * _n_clusters;
     if (!_balanced && approximate && to_sample < 0.5f * n) {
       /* sample points for k-means */
@@ -258,6 +258,49 @@ class LorannBase {
       _cluster_map = global_clustering.train(data, n, _global_dim, num_threads);
     }
 
+    /* Create filter attribute index maps for clusters for approximate search */
+    for (int i = 0; i < _cluster_map.size(); i++) {
+      attribute_data_map this_cluster_attribute_data_map;
+      std::vector<int> cluster = _cluster_map[i];
+      for (const auto& attr_set : attribute_partition_sets) {
+        std::vector<int> attribute_data_idx_vec; // vector of indexes of datapoints that have at least one of the attributes in attribute_subvec_set
+        for (int i = 0; i<cluster.size(); i++) {
+          int idx = cluster[i];
+          if (attr_set.count(_attributes[idx]) != 0) { // for each datapoint, check if it has this attribute
+            attribute_data_idx_vec.push_back(idx);                 // if yes, add it to the map for the corresponding attribute set
+          }
+        }  
+        this_cluster_attribute_data_map.insert({attr_set, attribute_data_idx_vec});
+      }
+      _cluster_attribute_data_maps.push_back(this_cluster_attribute_data_map); // add cluster attribute data map to vector of all cluster attribute data maps
+    }
+    /* printouts to help see if indexes were built correctly */
+    std::vector<int> cluster = _cluster_map[0];
+    attribute_data_map this_cluster_attribute_data_map = _cluster_attribute_data_maps[0];
+    std::vector<std::string> attribute_string_vec = {"brown"};
+    std::set<std::string> attribute_key(attribute_string_vec.begin(), attribute_string_vec.end());
+    std::vector<int> colour_partition_data_idxs = this_cluster_attribute_data_map[attribute_key];
+    for (int i = 0; i < 10; i++) {
+      std::cout << colour_partition_data_idxs[i] << " - ";
+      std::cout << "corresponding attribute: " << _attributes[colour_partition_data_idxs[i]] << "|";
+    }
+
+    return global_clustering.assign(train_data, train_n, _train_size);
+  }
+
+  std::vector<std::vector<int>> clustering(KMeans &global_clustering, const float *data,
+                                          const int n, const float *train_data, const int train_n,
+                                          const bool approximate, int num_threads) {
+    const int to_sample = SAMPLED_POINTS_PER_CLUSTER * _n_clusters;
+    if (!_balanced && approximate && to_sample < 0.5f * n) {
+      /* sample points for k-means */
+      const RowMatrix sampled =
+      sample_rows(Eigen::Map<const RowMatrix>(data, n, _global_dim), to_sample);
+      (void)global_clustering.train(sampled.data(), sampled.rows(), sampled.cols(), num_threads);
+      _cluster_map = global_clustering.assign(data, n, 1);
+    } else {
+      _cluster_map = global_clustering.train(data, n, _global_dim, num_threads);
+    }
     return global_clustering.assign(train_data, train_n, _train_size);
   }
 
@@ -305,9 +348,11 @@ class LorannBase {
   int _train_size;
   bool _euclidean;
   bool _balanced;
+  typedef std::unordered_map<std::set<std::string>, std::vector<int>, set_hash> attribute_data_map;
   std::vector<std::string> _attributes;
   std::vector<std::string> _attribute_strings;
-  std::unordered_map<std::set<std::string>, std::vector<int>, set_hash> _attribute_data_map;
+  attribute_data_map _attribute_data_map;
+  std::vector<attribute_data_map> _cluster_attribute_data_maps;
 
   /* vector of points assigned to a cluster, for each cluster */
   std::vector<std::vector<int>> _cluster_map;

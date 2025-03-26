@@ -179,6 +179,7 @@ class Lorann : public LorannBase {
     }
 #endif
     
+    /* Construct index for exact search */
     std::vector<std::set<std::string>> attribute_partition_sets;
     if (n_attribute_partitions >= 0) {
       std::vector<std::vector<std::string>> attr_subvecs = split_vector(_attribute_strings, n_attribute_partitions); // partition the attributes into groups of attributes
@@ -187,7 +188,7 @@ class Lorann : public LorannBase {
         std::vector<int> attribute_data_idx_vec; // vector of indexes of datapoints that have at least one of the attributes in attribute_subvec_set
         for (int i = 0; i<_n_samples; i++) {
           if (attribute_subvec_set.count(_attributes[i]) != 0) { // for each datapoint, check if it has this attribute
-            attribute_data_idx_vec.push_back(i);
+            attribute_data_idx_vec.push_back(i);                 // if yes, add it to the map for the corresponding attribute set
           }
         }  
         _attribute_data_map.insert({attribute_subvec_set, attribute_data_idx_vec});
@@ -242,11 +243,11 @@ class Lorann : public LorannBase {
       RowMatrix reduced_query_mat = query_mat * global_dim_reduction;
       cluster_train_map =
           clustering(global_clustering, reduced_train_mat.data(), reduced_train_mat.rows(),
-                     reduced_query_mat.data(), reduced_query_mat.rows(), approximate, num_threads);
+                     reduced_query_mat.data(), reduced_query_mat.rows(), approximate, num_threads, attribute_partition_sets);
     } else {
       cluster_train_map =
           clustering(global_clustering, reduced_train_mat.data(), reduced_train_mat.rows(),
-                     reduced_train_mat.data(), reduced_train_mat.rows(), approximate, num_threads);
+                     reduced_train_mat.data(), reduced_train_mat.rows(), approximate, num_threads, attribute_partition_sets);
     }
 
     /* rotate the cluster centroid matrix */

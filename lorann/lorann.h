@@ -116,11 +116,15 @@ class Lorann : public LorannBase {
     ColVectorInt all_idxs(total_pts);
     ColVector tmp(_max_rank);
 
-    int curr = 0;
+    int curr_cum_sz = 0;
+    int curr_cum_cluster_sz = 0;
     for (int i = 0; i < clusters_to_search; ++i) {
+      attribute_data_map this_cluster_attribute_data_map = _cluster_attribute_data_maps[i];
+      std::vector<int> attribute_data_idxs = this_cluster_attribute_data_map[filter_attributes];
+      int n_filtered_cluster_datapoints = attribute_data_idxs.size();
       const int cluster = I[i];
       const int sz = _cluster_sizes[cluster];
-      if (sz == 0) continue;
+      if (sz == 0 || n_filtered_cluster_datapoints == 0) continue;
 
       const ColMatrixUInt8 &A = _A[cluster];
       const ColMatrixUInt8 &B = _B[cluster];
@@ -140,18 +144,30 @@ class Lorann : public LorannBase {
       /* compute r = s^T B */
       quant_data.quantized_matvec_product_B(B, quantized_query_doubled, B_correction, tmpfact,
                                             principal_axis_tmp, compensation_tmp,
-                                            &all_distances[curr]);
+                                            &all_distances[curr_cum_cluster_sz]);
 
       if (_euclidean)
-        add_inplace(_cluster_norms[cluster].data(), &all_distances[curr],
+        add_inplace(_cluster_norms[cluster].data(), &all_distances[curr_cum_cluster_sz],
                     _cluster_norms[cluster].size());
 
-      std::memcpy(&all_idxs[curr], _cluster_map[cluster].data(), sz * sizeof(int));
-      curr += sz;
+      std::memcpy(&all_idxs[curr_cum_sz], attribute_data_idxs.data(), n_filtered_cluster_datapoints * sizeof(int));
+      curr_cum_sz += n_filtered_cluster_datapoints;
+      //   std::memcpy(&all_idxs[curr], _cluster_map[cluster].data(), sz * sizeof(int));  
+      curr_cum_cluster_sz += sz;
+      
     }
-
-    select_final(_euclidean ? data : scaled_query.data(), k, points_to_rerank, total_pts,
-                 all_idxs.data(), all_distances.data(), idx_out, dist_out);
+    std::cout << "Got past the cluster loop" << std::endl;
+    std::cout << "curr_cum_sz: " << curr_cum_sz << std::endl;
+    std::cout << "curr_cum_cluster_sz: " << curr_cum_cluster_sz << std::endl;
+    all_idxs.resize(curr_cum_sz);
+    // all_distances.resize(curr);
+    ColVector filtered_distances(curr_cum_sz);
+    for (int i = 0; i < curr_cum_sz; i++) {
+      filtered_distances[i] = all_distances[all_idxs[i]];
+    }
+    //TODO: create new distances vector with only points in all_idxs
+    select_final(_euclidean ? data : scaled_query.data(), k, points_to_rerank, curr_cum_sz,
+                 all_idxs.data(), filtered_distances.data(), idx_out, dist_out);
   }
 
   using LorannBase::build;

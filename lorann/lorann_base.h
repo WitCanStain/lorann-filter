@@ -14,6 +14,8 @@
 
 namespace Lorann {
 
+typedef std::unordered_map<std::set<std::string>, std::vector<int>, set_hash> attribute_data_map;
+
 class LorannBase {
  public:
   LorannBase(float *data, int m, int d, int n_clusters, int global_dim, std::vector<std::string>& attributes, std::vector<std::string>& attribute_strings, int rank, int train_size,
@@ -131,23 +133,25 @@ class LorannBase {
    * @param out The index output array of length k
    * @param dist_out The (optional) distance output array of length k
    */
-  void exact_search(const float *q, int k, int *out, std::set<std::string>& filter_attributes, float *dist_out = nullptr) const {
+  void exact_search(const float *q, int k, int *out, const std::set<std::string>& filter_attributes, float *dist_out = nullptr) const {
     float *data_ptr = _data;
     // float *data_ptr;
-    // if (_attribute_data_map.find(filter_attributes) != 0) {
-      
-    // } else {
-    //   data_ptr = _data;
-    // }
-
-    Vector dist(_n_samples);
+    std::cout << "running exact search 1" << std::endl;
+    std::vector<int> attribute_data_idxs = _attribute_data_map[filter_attributes];
+    int n_datapoints = attribute_data_idxs.size();
+    std::cout << "n_datapoints: " << n_datapoints << std::endl;
+    for (int i = 0; i < 10; i++) {
+      std::cout << "dp idx: " << attribute_data_idxs[i] << std::endl;
+      std::cout << "dp attr: " << _attributes[attribute_data_idxs[i]] << " ";
+    }
+    Vector dist(n_datapoints);
     if (_euclidean) {
-      for (int i = 0; i < _n_samples; ++i) {
-        dist[i] = squared_euclidean(q, data_ptr + i * _dim, _dim);
+      for (int i = 0; i < n_datapoints; ++i) {
+        dist[i] = squared_euclidean(q, data_ptr + attribute_data_idxs[i] * _dim, _dim);
       }
     } else {
-      for (int i = 0; i < _n_samples; ++i) {
-        dist[i] = -dot_product(q, data_ptr + i * _dim, _dim);
+      for (int i = 0; i < n_datapoints; ++i) {
+        dist[i] = -dot_product(q, data_ptr + attribute_data_idxs[i] * _dim, _dim);
       }
     }
 
@@ -161,14 +165,17 @@ class LorannBase {
     }
 
     const int final_k = k;
-    if (k > _n_samples) {
-      k = _n_samples;
+    if (k > n_datapoints) {
+      k = n_datapoints;
     }
-
-    select_k(k, out, _n_samples, NULL, dist.data(), dist_out, true);
+    Eigen::VectorXi shuffled_out(k);
+    select_k(k, shuffled_out.data(), n_datapoints, NULL, dist.data(), dist_out, true);
     for (int i = k; i < final_k; ++i) {
       out[i] = -1;
       if (dist_out) dist_out[i] = std::numeric_limits<float>::infinity();
+    }
+    for (int i = 0; i < k; i++) {
+      out[i] = attribute_data_idxs[shuffled_out[i]];
     }
   }
 
@@ -270,34 +277,34 @@ class LorannBase {
             attribute_data_idx_vec.push_back(idx);                 // if yes, add it to the map for the corresponding attribute set
           }
         } 
-        /**/
-        if (i==0) {
-          std::cout << "attribute_data_idx_vec.size(): " << attribute_data_idx_vec.size() << std::endl;;
-          for (const auto& attr : attr_set) {
-            std::cout << "attr in attr set: " << attr << " - ";
-          }
-          for (int j = 0; j < attribute_data_idx_vec.size(); j++) {
-            std::cout << "itr property: " << _attributes[attribute_data_idx_vec[j]] << " - ";
-          }
-        }
-        /**/
+        // /**/
+        // if (i==0) {
+        //   std::cout << "attribute_data_idx_vec.size(): " << attribute_data_idx_vec.size() << std::endl;;
+        //   for (const auto& attr : attr_set) {
+        //     std::cout << "attr in attr set: " << attr << " - ";
+        //   }
+        //   for (int j = 0; j < attribute_data_idx_vec.size(); j++) {
+        //     std::cout << "itr property: " << _attributes[attribute_data_idx_vec[j]] << " - ";
+        //   }
+        // }
+        // /**/
         this_cluster_attribute_data_map.insert({attr_set, attribute_data_idx_vec});
       }
       _cluster_attribute_data_maps.push_back(this_cluster_attribute_data_map); // add cluster attribute data map to vector of all cluster attribute data maps
     }
 
     /* printouts to help see if indexes were built correctly */
-    std::cout << "cluster map size: " << _cluster_map.size() << std::endl;
-    std::vector<int> cluster = _cluster_map[0];
-    attribute_data_map this_cluster_attribute_data_map = _cluster_attribute_data_maps[0];
-    std::vector<std::string> attribute_string_vec = {"brown"};
-    std::set<std::string> attribute_key(attribute_string_vec.begin(), attribute_string_vec.end());
-    std::vector<int> colour_partition_data_idxs = this_cluster_attribute_data_map[attribute_key];
-    std::cout << "colour_partition_data_idxs size: " << colour_partition_data_idxs.size() << std::endl;
-    for (int i = 0; i < colour_partition_data_idxs.size(); i++) {
-      std::cout << colour_partition_data_idxs[i] << " - ";
-      std::cout << "corresponding attribute: " << _attributes[colour_partition_data_idxs[i]] << "|";
-    }
+    // std::cout << "cluster map size: " << _cluster_map.size() << std::endl;
+    // std::vector<int> cluster = _cluster_map[0];
+    // attribute_data_map this_cluster_attribute_data_map = _cluster_attribute_data_maps[0];
+    // std::vector<std::string> attribute_string_vec = {"brown"};
+    // std::set<std::string> attribute_key(attribute_string_vec.begin(), attribute_string_vec.end());
+    // std::vector<int> colour_partition_data_idxs = this_cluster_attribute_data_map[attribute_key];
+    // std::cout << "colour_partition_data_idxs size: " << colour_partition_data_idxs.size() << std::endl;
+    // for (int i = 0; i < colour_partition_data_idxs.size(); i++) {
+    //   std::cout << colour_partition_data_idxs[i] << " - ";
+    //   std::cout << "corresponding attribute: " << _attributes[colour_partition_data_idxs[i]] << "|";
+    // }
 
     return global_clustering.assign(train_data, train_n, _train_size);
   }
@@ -362,11 +369,11 @@ class LorannBase {
   int _train_size;
   bool _euclidean;
   bool _balanced;
-  typedef std::unordered_map<std::set<std::string>, std::vector<int>, set_hash> attribute_data_map;
+  
   std::vector<std::string> _attributes;
   std::vector<std::string> _attribute_strings;
-  attribute_data_map _attribute_data_map;
-  std::vector<attribute_data_map> _cluster_attribute_data_maps;
+  mutable attribute_data_map _attribute_data_map;
+  mutable std::vector<attribute_data_map> _cluster_attribute_data_maps;
 
   /* vector of points assigned to a cluster, for each cluster */
   std::vector<std::vector<int>> _cluster_map;

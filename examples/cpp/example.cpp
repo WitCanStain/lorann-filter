@@ -60,7 +60,7 @@ int main() {
   // std::cout <<  "X cols: " << X.cols() << std::endl;
   // std::cout <<  "Q cols: " << Q.cols() << std::endl;
 
-  const int k = 15;
+  const int k = 10;
   const int n_attr_partitions = 10;
   const int n_clusters = 1024;
   const int global_dim = 256;
@@ -84,10 +84,12 @@ int main() {
   std::cout << "----" << std::endl;
   std::cout << Q.row(0).data() << std::endl;
   std::cout << "Querying the index using exact search..." << std::endl;
-  index.exact_search(Q.row(0).data(), k, indices_exact.data(), filter_attributes, nullptr);
+  index.exact_search(Q.row(0).data(), k, indices_exact.data(), filter_attributes);
   std::cout << indices_exact.transpose() << std::endl;
-
-  std::cout << "Querying the index using approximate search..." << std::endl;
+  for (const auto& idx : indices_exact) {
+    std::cout << attributes[idx] << " ";
+  }
+  std::cout << std::endl << "Querying the index using approximate search..." << std::endl;
   index.search(Q.row(0).data(), k, clusters_to_search, points_to_rerank, indices.data(), filter_attributes);
   std::cout << indices.transpose() << std::endl;
 

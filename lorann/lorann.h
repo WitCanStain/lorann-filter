@@ -124,6 +124,7 @@ class Lorann : public LorannBase {
       int n_filtered_cluster_datapoints = attribute_data_idxs.size();
       const int cluster = I[i];
       const int sz = _cluster_sizes[cluster];
+      // std::cout << "n_filtered_cluster_datapoints: " << n_filtered_cluster_datapoints << std::endl;
       if (sz == 0 || n_filtered_cluster_datapoints == 0) continue;
 
       const ColMatrixUInt8 &A = _A[cluster];
@@ -156,18 +157,34 @@ class Lorann : public LorannBase {
       curr_cum_cluster_sz += sz;
       
     }
-    std::cout << "Got past the cluster loop" << std::endl;
     std::cout << "curr_cum_sz: " << curr_cum_sz << std::endl;
     std::cout << "curr_cum_cluster_sz: " << curr_cum_cluster_sz << std::endl;
-    all_idxs.resize(curr_cum_sz);
-    // all_distances.resize(curr);
+    // for (int i = 0; i < all_idxs.size(); i++) {
+    //   std::cout << _attributes[all_idxs[i]] << "-" << all_idxs[i] << "|";
+    //   if (_attributes[all_idxs[i]] != "brown") {
+    //     std::cout << "CORRECT DATA STOPS AT INDEX " << i;
+    //     break;
+    //   }
+    // }
+
     ColVector filtered_distances(curr_cum_sz);
+    // std::cout << "we here: " << curr_cum_sz << std::endl;
     for (int i = 0; i < curr_cum_sz; i++) {
       filtered_distances[i] = all_distances[all_idxs[i]];
     }
-    //TODO: create new distances vector with only points in all_idxs
+    Eigen::VectorXi shuffled_out(k);
     select_final(_euclidean ? data : scaled_query.data(), k, points_to_rerank, curr_cum_sz,
-                 all_idxs.data(), filtered_distances.data(), idx_out, dist_out);
+                 all_idxs.data(), filtered_distances.data(), shuffled_out.data(), dist_out);
+    for (int i = 0; i < k; i++) {
+      // if(!(std::find(all_idxs.begin(), all_idxs.end(), shuffled_out[i]) != all_idxs.end())) {
+      //   std::cout << "index " << shuffled_out[i] << " is not in all_idxs" << std::endl;
+      // } else {
+      //   std::cout << "+++index " << shuffled_out[i] << " IS in all_idxs" << std::endl;
+      // }
+      // std::cout << "shuffled_out[i]: " << shuffled_out[i] << std::endl;
+      // std::cout << "all_idxs[shuffled_out[i]]: " << all_idxs[shuffled_out[i]] << std::endl;
+      idx_out[i] = shuffled_out[i];
+    }
   }
 
   using LorannBase::build;

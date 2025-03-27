@@ -141,8 +141,8 @@ class LorannBase {
     int n_datapoints = attribute_data_idxs.size();
     std::cout << "n_datapoints: " << n_datapoints << std::endl;
     for (int i = 0; i < 10; i++) {
-      std::cout << "dp idx: " << attribute_data_idxs[i] << std::endl;
-      std::cout << "dp attr: " << _attributes[attribute_data_idxs[i]] << " ";
+      // std::cout << "dp idx: " << attribute_data_idxs[i] << std::endl;
+      // std::cout << "dp attr: " << _attributes[attribute_data_idxs[i]] << " ";
     }
     Vector dist(n_datapoints);
     if (_euclidean) {
@@ -187,7 +187,7 @@ class LorannBase {
                     const int *all_idxs, const float *all_distances, int *idx_out,
                     float *dist_out) const {
     const int n_selected = std::min(std::max(k, points_to_rerank), s);
-
+    std::cout << "n_selected: " << n_selected << std::endl;
     if (points_to_rerank == 0) {
       select_k(n_selected, idx_out, s, all_idxs, all_distances, dist_out, true);
 
@@ -208,9 +208,8 @@ class LorannBase {
 
       return;
     }
-
     std::vector<int> final_select(n_selected);
-    select_k(n_selected, final_select.data(), s, all_idxs, all_distances);
+    select_k(n_selected, final_select.data(), s, all_idxs, all_distances); // by the end of this function call final_select has the actual indexes of the datapoints in attributes vector
     reorder_exact(x, k, final_select, idx_out, dist_out);
   }
 
@@ -238,7 +237,7 @@ class LorannBase {
       if (dist_out) dist_out[0] = dist[index];
       return;
     }
-
+    std::cout << "reorder_exact n: " << n << std::endl;
     const int final_k = k;
     if (k > n) {
       k = n;

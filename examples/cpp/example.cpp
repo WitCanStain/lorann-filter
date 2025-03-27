@@ -73,7 +73,6 @@ int main() {
 
   std::cout << "Building the index..." << std::endl;
   std::vector<std::string> sliced_attributes(attributes.begin(), attributes.begin()+X.rows());
-  std::cout << "sliced attributes size: " << sliced_attributes.size() << std::endl;
   Lorann::Lorann<Lorann::SQ4Quantizer> index(X.data(), X.rows(), X.cols(), n_clusters, global_dim, sliced_attributes, attribute_strings,
                                              rank, train_size, euclidean, false);
   index.build(true, -1, n_attr_partitions);
@@ -87,13 +86,17 @@ int main() {
   index.exact_search(Q.row(0).data(), k, indices_exact.data(), filter_attributes);
   std::cout << indices_exact.transpose() << std::endl;
   for (const auto& idx : indices_exact) {
-    std::cout << attributes[idx] << " ";
+    std::cout << sliced_attributes[idx] << " ";
   }
   std::cout << std::endl << "Querying the index using approximate search..." << std::endl;
   index.search(Q.row(0).data(), k, clusters_to_search, points_to_rerank, indices.data(), filter_attributes);
+  std::cout << "approximate search finished." << std::endl;
   std::cout << indices.transpose() << std::endl;
-
-  std::cout << "Saving the index to disk..." << std::endl;
+  for (const auto& idx : indices) {
+    std::cout << "approx index: " << idx << "| ";
+    std::cout << "attr: " << sliced_attributes[idx] << std::endl;
+  }
+  std::cout << std::endl << "Saving the index to disk..." << std::endl;
   std::ofstream output_file("index.bin", std::ios::binary);
   cereal::BinaryOutputArchive output_archive(output_file);
   output_archive(index);

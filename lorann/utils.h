@@ -365,7 +365,6 @@ static void select_k(const int k, int *labels, const int k_base, const int *base
 
     return;
   }
-
   std::vector<int> perm(k_base);
   for (int i = 0; i < k_base; ++i) {
     perm[i] = i;
@@ -378,7 +377,6 @@ static void select_k(const int k, int *labels, const int k_base, const int *base
   } else {
     miniselect::pdqselect_branchless(perm.begin(), perm.begin() + k, perm.end(), comp);
   }
-
   if (base_labels != NULL) {
     for (int i = 0; i < k; ++i) {
       labels[i] = base_labels[perm[i]];

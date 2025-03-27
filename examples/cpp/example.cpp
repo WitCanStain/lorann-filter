@@ -57,10 +57,8 @@ int main() {
   std::cout << "Loading data..." << std::endl;
   RowMatrix X = load_vectors();
   RowMatrix Q = X.topRows(1000);
-  std::cout <<  "X cols: " << X.cols() << std::endl;
-  std::cout <<  "Q cols: " << Q.cols() << std::endl;
-  std::cout << attributes[30000] << std::endl;
-
+  // std::cout <<  "X cols: " << X.cols() << std::endl;
+  // std::cout <<  "Q cols: " << Q.cols() << std::endl;
 
   const int k = 15;
   const int n_attr_partitions = 10;

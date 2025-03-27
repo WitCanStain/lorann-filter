@@ -269,18 +269,32 @@ class LorannBase {
           if (attr_set.count(_attributes[idx]) != 0) { // for each datapoint, check if it has this attribute
             attribute_data_idx_vec.push_back(idx);                 // if yes, add it to the map for the corresponding attribute set
           }
-        }  
+        } 
+        /**/
+        if (i==0) {
+          std::cout << "attribute_data_idx_vec.size(): " << attribute_data_idx_vec.size() << std::endl;;
+          for (const auto& attr : attr_set) {
+            std::cout << "attr in attr set: " << attr << " - ";
+          }
+          for (int j = 0; j < attribute_data_idx_vec.size(); j++) {
+            std::cout << "itr property: " << _attributes[attribute_data_idx_vec[j]] << " - ";
+          }
+        }
+        /**/
         this_cluster_attribute_data_map.insert({attr_set, attribute_data_idx_vec});
       }
       _cluster_attribute_data_maps.push_back(this_cluster_attribute_data_map); // add cluster attribute data map to vector of all cluster attribute data maps
     }
+
     /* printouts to help see if indexes were built correctly */
+    std::cout << "cluster map size: " << _cluster_map.size() << std::endl;
     std::vector<int> cluster = _cluster_map[0];
     attribute_data_map this_cluster_attribute_data_map = _cluster_attribute_data_maps[0];
     std::vector<std::string> attribute_string_vec = {"brown"};
     std::set<std::string> attribute_key(attribute_string_vec.begin(), attribute_string_vec.end());
     std::vector<int> colour_partition_data_idxs = this_cluster_attribute_data_map[attribute_key];
-    for (int i = 0; i < 10; i++) {
+    std::cout << "colour_partition_data_idxs size: " << colour_partition_data_idxs.size() << std::endl;
+    for (int i = 0; i < colour_partition_data_idxs.size(); i++) {
       std::cout << colour_partition_data_idxs[i] << " - ";
       std::cout << "corresponding attribute: " << _attributes[colour_partition_data_idxs[i]] << "|";
     }

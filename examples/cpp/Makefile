@@ -12,6 +12,9 @@ prepare-data:
 example:
 	$(CXX) -std=c++17 -O3 -march=native -fopenmp -DNDEBUG -I../../lorann -flax-vector-conversions example.cpp -o example -lgomp
 
+filter:
+	$(CXX) -std=c++17 -O3 -march=native -fopenmp -DNDEBUG -I../../lorann -flax-vector-conversions filter.cpp -o filter -lgomp
+
 clean:
 	rm example wiki-news-300d-1M.vec index.bin
 

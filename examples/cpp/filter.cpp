@@ -53,23 +53,11 @@ RowMatrix load_vectors() {
   return ret.topRows(100000);
 }
 
-int main() {
+int filter(int k, int n_attr_partitions, int n_clusters, int global_dim, int rank, int train_size, bool euclidean, int clusters_to_search, int points_to_rerank, std::string filter_attribute) {
   std::cout << "Loading data..." << std::endl;
   RowMatrix X = load_vectors();
   RowMatrix Q = X.topRows(1000);
-  // std::cout <<  "X cols: " << X.cols() << std::endl;
-  // std::cout <<  "Q cols: " << Q.cols() << std::endl;
 
-  const int k = 10;
-  const int n_attr_partitions = 10;
-  const int n_clusters = 1024;
-  const int global_dim = 256;
-  const int rank = 32;
-  const int train_size = 5;
-  const bool euclidean = true;
-
-  const int clusters_to_search = 64;
-  const int points_to_rerank = 2000;
 
   std::cout << "Building the index..." << std::endl;
   std::vector<std::string> sliced_attributes(attributes.begin(), attributes.begin()+X.rows());
@@ -77,7 +65,7 @@ int main() {
                                              rank, train_size, euclidean, false);
   index.build(true, -1, n_attr_partitions);
   
-  std::set<std::string> filter_attributes = {"brown"};
+  std::set<std::string> filter_attributes = {filter_attribute};
 
   Eigen::VectorXi indices(k), indices_exact(k);
   std::cout << "----" << std::endl;

@@ -8,6 +8,13 @@ import sys
 import cffi
 import invoke
 
+on_win = sys.platform.startswith("win")
+
+def print_banner(msg):
+    print("==================================================")
+    print("= {} ".format(msg))
+
+
 @invoke.task
 def clean(c):
     """Remove any built objects"""
@@ -43,7 +50,7 @@ def build_cppmult_test(c):
     """Build the shared library for the sample C++ code"""
     print_banner("Building C++ Library")
     invoke.run(
-        "g++ -std=c++17 -O3 -march=native -shared -fopenmp -fPIC -DNDEBUG -I../../lorann -flax-vector-conversions filter.cpp -o filter -lgomp"
+        "g++ -std=c++17 -O3 --verbose -march=native -shared -fopenmp -fPIC -DNDEBUG -I../../lorann -flax-vector-conversions ../filter.cpp -o filter -lgomp"
         "-o libfilter.so "
     )
     print("* Complete")

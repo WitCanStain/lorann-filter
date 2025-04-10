@@ -7,6 +7,7 @@
 #include "lorann.h"
 #include <vector>
 
+
 typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> RowMatrix;
 std::vector<std::string> attributes;
 const int n_attributes = 10;
@@ -52,8 +53,8 @@ RowMatrix load_vectors() {
 
   return ret.topRows(100000);
 }
-
-int filter(int k, int n_attr_partitions, int n_clusters, int global_dim, int rank, int train_size, bool euclidean, int clusters_to_search, int points_to_rerank, std::string filter_attribute) {
+extern "C" {
+int* filter(int k, int n_attr_partitions, int n_clusters, int global_dim, int rank, int train_size, bool euclidean, int clusters_to_search, int points_to_rerank, const char* filter_attribute, const char* filter_approach) {
   std::cout << "Loading data..." << std::endl;
   RowMatrix X = load_vectors();
   RowMatrix Q = X.topRows(1000);
@@ -64,14 +65,16 @@ int filter(int k, int n_attr_partitions, int n_clusters, int global_dim, int ran
   Lorann::Lorann<Lorann::SQ4Quantizer> index(X.data(), X.rows(), X.cols(), n_clusters, global_dim, sliced_attributes, attribute_strings,
                                              rank, train_size, euclidean, false);
   index.build(true, -1, n_attr_partitions);
-  
+  std::cout << "mark filter_attribute: " << filter_attribute << std::endl;
   std::set<std::string> filter_attributes = {filter_attribute};
+  std::cout << "mark k: " << k << std::endl;
 
   Eigen::VectorXi indices(k), indices_exact(k);
+  std::cout << "mark 3" << std::endl;
   std::cout << "----" << std::endl;
   std::cout << Q.row(0).data() << std::endl;
   std::cout << "Querying the index using exact search..." << std::endl;
-  index.exact_search(Q.row(0).data(), k, indices_exact.data(), filter_attributes, "postfilter");
+  index.exact_search(Q.row(0).data(), k, indices_exact.data(), filter_attributes, filter_approach);
   std::cout << indices_exact.transpose() << std::endl;
   for (const auto& idx : indices_exact) {
     std::cout << sliced_attributes[idx] << " ";
@@ -89,5 +92,6 @@ int filter(int k, int n_attr_partitions, int n_clusters, int global_dim, int ran
   cereal::BinaryOutputArchive output_archive(output_file);
   output_archive(index);
 
-  return 0;
+  return indices_exact.data();
+}
 }

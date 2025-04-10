@@ -133,25 +133,41 @@ class LorannBase {
    * @param out The index output array of length k
    * @param dist_out The (optional) distance output array of length k
    */
-  void exact_search(const float *q, int k, int *out, const std::set<std::string>& filter_attributes, float *dist_out = nullptr) const {
+  void exact_search(const float *q, int k, int *out, const std::set<std::string>& filter_attributes, std::string filter_approach, float *dist_out = nullptr) const {
     float *data_ptr = _data;
     // float *data_ptr;
-    std::cout << "running exact search 1" << std::endl;
-    std::vector<int> attribute_data_idxs = _attribute_data_map[filter_attributes];
-    int n_datapoints = attribute_data_idxs.size();
-    std::cout << "n_datapoints: " << n_datapoints << std::endl;
-    for (int i = 0; i < 10; i++) {
-      // std::cout << "dp idx: " << attribute_data_idxs[i] << std::endl;
-      // std::cout << "dp attr: " << _attributes[attribute_data_idxs[i]] << " ";
+    std::cout << "running exact search with " << filter_approach << " strategy and k: " << k << std::endl;
+    int n_datapoints;
+    Vector dist(_n_samples);
+    std::vector<int> attribute_data_idxs;
+    if (filter_approach == "indexing") {
+      attribute_data_idxs = _attribute_data_map[filter_attributes];
+      n_datapoints = attribute_data_idxs.size();
+      std::cout << "n_datapoints: " << n_datapoints << std::endl;
+      // for (int i = 0; i < 10; i++) {
+      //   // std::cout << "dp idx: " << attribute_data_idxs[i] << std::endl;
+      //   // std::cout << "dp attr: " << _attributes[attribute_data_idxs[i]] << " ";
+      // }
+    } else if (filter_approach == "prefilter") {
+      for (int i = 0; i < _n_samples; i++) {
+        if (filter_attributes.find(_attributes[i]) != filter_attributes.end()) {
+          attribute_data_idxs.push_back(i);
+        }
+      }
+      n_datapoints = attribute_data_idxs.size();
+    } else if (filter_approach == "postfilter") {
+      n_datapoints = _n_samples;
+    } else {
+      throw std::invalid_argument("filter_approach must be one of 'indexing', 'prefilter', or 'postfilter'");
     }
-    Vector dist(n_datapoints);
+    
     if (_euclidean) {
       for (int i = 0; i < n_datapoints; ++i) {
-        dist[i] = squared_euclidean(q, data_ptr + attribute_data_idxs[i] * _dim, _dim);
+        dist[i] = squared_euclidean(q, data_ptr + ((filter_approach == "postfilter") ? i : attribute_data_idxs[i]) * _dim, _dim);
       }
     } else {
       for (int i = 0; i < n_datapoints; ++i) {
-        dist[i] = -dot_product(q, data_ptr + attribute_data_idxs[i] * _dim, _dim);
+        dist[i] = -dot_product(q, data_ptr + ((filter_approach == "postfilter") ? i : attribute_data_idxs[i]) * _dim, _dim);
       }
     }
 
@@ -170,13 +186,69 @@ class LorannBase {
     }
     Eigen::VectorXi shuffled_out(k);
     select_k(k, shuffled_out.data(), n_datapoints, NULL, dist.data(), dist_out, true);
+    if (filter_approach == "postfilter") {
+      std::vector<int>* matched_idxs = new std::vector<int>();
+      std::cout << "matched_idxs addr 0: " << matched_idxs << std::endl;
+      for (int i = 0; i < k; i++) {
+        if (filter_attributes.find(_attributes[shuffled_out[i]]) != filter_attributes.end()) {
+          matched_idxs->push_back(shuffled_out[i]);
+        }
+      }
+      int matched_k = matched_idxs->size();
+      std::cout << "matched_k: " << matched_k << std::endl;
+      std::cout << "k: " << k << std::endl;
+      std::cout << (matched_k < k) << std::endl;
+      int new_k = k;
+      if (matched_k < k) {
+        std::cout << "true" << std::endl;
+      }
+      std::vector<std::vector<int>*> ptr_vec;
+      while (matched_k < k) { // if not enough datapoints are found in k results, double it and search again
+        new_k = new_k * 2;
+        if (new_k > _n_samples) new_k = _n_samples;
+        std::cout << "rerunning select_k with k=" << new_k << std::endl;
+        Eigen::VectorXi new_out(new_k);
+        select_k(new_k, new_out.data(), n_datapoints, NULL, dist.data(), dist_out, true);
+        std::vector<int>* new_matched_idxs = new std::vector<int>();
+        ptr_vec.push_back(new_matched_idxs);
+        for (int i = 0; i < new_k; i++) {
+          if (filter_attributes.find(_attributes[new_out[i]]) != filter_attributes.end()) {
+            new_matched_idxs->push_back(new_out[i]);
+          }
+        }
+        matched_k = new_matched_idxs->size();
+        matched_idxs = new_matched_idxs;
+        std::cout << "new_matched_idxs, first element " << (*new_matched_idxs)[0] << std::endl;
+        std::cout << "matched_idxs, first element " << (*matched_idxs)[0] << std::endl;
+        std::cout << "matched_idxs addr: " << matched_idxs << std::endl;
+        if (new_k == _n_samples) {
+          std::cout << "could not find enough samples ( found " << matched_k << ")" << std::endl;
+          break;
+        } 
+      }
+      std::cout << "matched_k 2: " << matched_k << std::endl;
+      std::cout << "matched_idxs addr 2: " << matched_idxs << std::endl;
+      if (matched_k >= k) {
+        for (int i = 0; i < k; i++) {
+          std::cout << "og idxs: " << (*matched_idxs)[i] << " - ";
+          out[i] = (*matched_idxs)[i];
+          std::cout << "out[" << i << "]:" << out[i] << " ";
+        }
+      }
+      for (int i = 0; i < ptr_vec.size(); i++) { // deallocate memory
+        delete ptr_vec[i];
+      }
+    } else {
+      for (int i = 0; i < k; i++) {
+        out[i] = attribute_data_idxs[shuffled_out[i]];
+      }
+    }
     for (int i = k; i < final_k; ++i) {
       out[i] = -1;
       if (dist_out) dist_out[i] = std::numeric_limits<float>::infinity();
     }
-    for (int i = 0; i < k; i++) {
-      out[i] = attribute_data_idxs[shuffled_out[i]];
-    }
+    
+    
   }
 
  protected:

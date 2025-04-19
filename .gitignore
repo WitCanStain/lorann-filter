@@ -171,4 +171,4 @@ doxygen
 /examples/cpp/example
 /examples/cpp/experiment_parametriser/wiki-news-300d-1M.vec
 /examples/cpp/experiment_parametriser/index.bin
-
+/examples/cpp/experiment_parametriser/venv/*

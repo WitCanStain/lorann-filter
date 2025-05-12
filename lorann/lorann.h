@@ -73,7 +73,7 @@ class Lorann : public LorannBase {
    * @param dist_out The (optional) distance output array of length k
    */
   void search(const float *data, const int k, const int clusters_to_search,
-              const int points_to_rerank, int *idx_out, std::set<std::string>& filter_attributes, float *dist_out = nullptr) const override {
+              const int points_to_rerank, int *idx_out, std::set<std::string>& filter_attributes, std::string filter_approach, float *dist_out = nullptr) const override {
     ColVector scaled_query;
     ColVector transformed_query;
     Eigen::Map<const Eigen::VectorXf> data_vec(data, _dim);
@@ -118,6 +118,8 @@ class Lorann : public LorannBase {
 
     int curr_cum_sz = 0;
     int curr_cum_cluster_sz = 0;
+    bool use_attr_indexing = (filter_approach == "indexing");
+    std::cout << "use_attr_indexing: " << use_attr_indexing << std::endl;
     for (int i = 0; i < clusters_to_search; ++i) {
       attribute_data_map this_cluster_attribute_data_map = _cluster_attribute_data_maps[i];
       std::vector<int> attribute_data_idxs = this_cluster_attribute_data_map[filter_attributes];
@@ -150,15 +152,16 @@ class Lorann : public LorannBase {
       if (_euclidean)
         add_inplace(_cluster_norms[cluster].data(), &all_distances[curr_cum_cluster_sz],
                     _cluster_norms[cluster].size());
-
-      std::memcpy(&all_idxs[curr_cum_sz], attribute_data_idxs.data(), n_filtered_cluster_datapoints * sizeof(int));
-      curr_cum_sz += n_filtered_cluster_datapoints;
+      
+      std::memcpy(&all_idxs[curr_cum_sz], use_attr_indexing ? attribute_data_idxs.data() : _cluster_map[cluster].data(), use_attr_indexing ? n_filtered_cluster_datapoints * sizeof(int) : sz * sizeof(int));
+      curr_cum_sz += use_attr_indexing ? n_filtered_cluster_datapoints : sz;
       //   std::memcpy(&all_idxs[curr], _cluster_map[cluster].data(), sz * sizeof(int));  
       curr_cum_cluster_sz += sz;
       
     }
     std::cout << "curr_cum_sz: " << curr_cum_sz << std::endl;
     std::cout << "curr_cum_cluster_sz: " << curr_cum_cluster_sz << std::endl;
+    std::cout << "filter_approach: " << filter_approach << std::endl;
     // for (int i = 0; i < all_idxs.size(); i++) {
     //   std::cout << _attributes[all_idxs[i]] << "-" << all_idxs[i] << "|";
     //   if (_attributes[all_idxs[i]] != "brown") {
@@ -175,6 +178,63 @@ class Lorann : public LorannBase {
     Eigen::VectorXi shuffled_out(k);
     select_final(_euclidean ? data : scaled_query.data(), k, points_to_rerank, curr_cum_sz,
                  all_idxs.data(), filtered_distances.data(), shuffled_out.data(), dist_out);
+    
+    std::cout << "approx search here" << std::endl;
+    if (filter_approach == "postfilter") {
+      std::vector<int>* matched_idxs = new std::vector<int>();
+      std::cout << "matched_idxs addr 0: " << matched_idxs << std::endl;
+      for (int i = 0; i < k; i++) {
+        if (filter_attributes.find(_attributes[shuffled_out[i]]) != filter_attributes.end()) {
+          matched_idxs->push_back(shuffled_out[i]);
+        }
+      }
+      int matched_k = matched_idxs->size();
+      std::cout << "matched_k: " << matched_k << std::endl;
+      std::cout << "k: " << k << std::endl;
+      std::cout << (matched_k < k) << std::endl;
+      int new_k = k;
+      if (matched_k < k) {
+        std::cout << "true" << std::endl;
+      }
+      std::vector<std::vector<int>*> ptr_vec;
+      while (matched_k < k) { // if not enough datapoints are found in k results, double it and search again
+        new_k = new_k * 2;
+        if (new_k > _n_samples) new_k = _n_samples;
+        std::cout << "rerunning select_k with k=" << new_k << std::endl;
+        Eigen::VectorXi new_out(new_k);
+        select_final(_euclidean ? data : scaled_query.data(), new_k, points_to_rerank, curr_cum_sz,
+                 all_idxs.data(), filtered_distances.data(), new_out.data(), dist_out);
+        // select_k(new_k, new_out.data(), n_datapoints, NULL, dist.data(), dist_out, true);
+        std::vector<int>* new_matched_idxs = new std::vector<int>();
+        ptr_vec.push_back(new_matched_idxs);
+        for (int i = 0; i < new_k; i++) {
+          if (filter_attributes.find(_attributes[new_out[i]]) != filter_attributes.end()) {
+            new_matched_idxs->push_back(new_out[i]);
+          }
+        }
+        matched_k = new_matched_idxs->size();
+        matched_idxs = new_matched_idxs;
+        std::cout << "new_matched_idxs, first element " << (*new_matched_idxs)[0] << std::endl;
+        std::cout << "matched_idxs, first element " << (*matched_idxs)[0] << std::endl;
+        std::cout << "matched_idxs addr: " << matched_idxs << std::endl;
+        if (new_k == _n_samples) {
+          std::cout << "could not find enough samples (found " << matched_k << ")" << std::endl;
+          break;
+        } 
+      }
+      std::cout << "matched_k 2: " << matched_k << std::endl;
+      std::cout << "matched_idxs addr 2: " << matched_idxs << std::endl;
+      if (matched_k >= k) {
+        for (int i = 0; i < k; i++) {
+          std::cout << "og idxs: " << (*matched_idxs)[i] << " - ";
+          idx_out[i] = (*matched_idxs)[i];
+          std::cout << "idx_out[" << i << "]:" << idx_out[i] << " ";
+        }
+      }
+      for (int i = 0; i < ptr_vec.size(); i++) { // deallocate memory
+        delete ptr_vec[i];
+      }
+  } else {
     for (int i = 0; i < k; i++) {
       // if(!(std::find(all_idxs.begin(), all_idxs.end(), shuffled_out[i]) != all_idxs.end())) {
       //   std::cout << "index " << shuffled_out[i] << " is not in all_idxs" << std::endl;
@@ -185,6 +245,8 @@ class Lorann : public LorannBase {
       // std::cout << "all_idxs[shuffled_out[i]]: " << all_idxs[shuffled_out[i]] << std::endl;
       idx_out[i] = shuffled_out[i];
     }
+  }
+    
   }
 
   using LorannBase::build;

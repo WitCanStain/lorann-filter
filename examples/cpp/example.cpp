@@ -89,7 +89,7 @@ int main() {
     std::cout << sliced_attributes[idx] << " ";
   }
   std::cout << std::endl << "Querying the index using approximate search..." << std::endl;
-  index.search(Q.row(0).data(), k, clusters_to_search, points_to_rerank, indices.data(), filter_attributes);
+  index.search(Q.row(0).data(), k, clusters_to_search, points_to_rerank, indices.data(), filter_attributes, "indexing");
   std::cout << "approximate search finished." << std::endl;
   std::cout << indices.transpose() << std::endl;
   for (const auto& idx : indices) {

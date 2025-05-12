@@ -121,7 +121,7 @@ class LorannBase {
                      int num_threads) {}
 
   virtual void search(const float *data, const int k, const int clusters_to_search,
-                      const int points_to_rerank, int *idx_out, std::set<std::string>& filter_attributes, float *dist_out = nullptr) const {}
+                      const int points_to_rerank, int *idx_out, std::set<std::string>& filter_attributes, std::string filter_approach, float *dist_out = nullptr) const {}
 
   virtual ~LorannBase() {}
 
@@ -222,7 +222,7 @@ class LorannBase {
         std::cout << "matched_idxs, first element " << (*matched_idxs)[0] << std::endl;
         std::cout << "matched_idxs addr: " << matched_idxs << std::endl;
         if (new_k == _n_samples) {
-          std::cout << "could not find enough samples ( found " << matched_k << ")" << std::endl;
+          std::cout << "could not find enough samples (found " << matched_k << ")" << std::endl;
           break;
         } 
       }

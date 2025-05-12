@@ -2,6 +2,7 @@
 import ctypes
 import pathlib
 from numpy.ctypeslib import ndpointer
+import time
 if __name__ == "__main__":
     # Load the shared library into ctypes
     libname = pathlib.Path().absolute() / "../libfilter.so"
@@ -15,11 +16,42 @@ if __name__ == "__main__":
     euclidean = True
     clusters_to_search = 64
     points_to_rerank = 2000
+    exact_search = True
+
+    c_lib.build_index.restype = ctypes.c_bool
+    c_lib.build_index.argtypes = ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool
+    
+    c_lib.filter.restype = ndpointer(dtype=ctypes.c_int, shape=(k,))
+    c_lib.filter.argtypes = ctypes.c_int, ctypes.c_bool, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p
+
+    
+    
     filter_attribute = "brown"
     filter_approach = "postfilter"
+    query_index = 0
     filter_attribute_b_string = filter_attribute.encode('utf-8')
     filter_approach_b_string = filter_approach.encode('utf-8')
-    c_lib.filter.restype = ndpointer(dtype=ctypes.c_int, shape=(k,))
-    c_lib.filter.argtypes = ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool, ctypes.c_int, ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p
-    answer = c_lib.filter(k, n_attr_partitions, n_clusters, global_dim, rank, train_size, ctypes.c_bool(euclidean), clusters_to_search, points_to_rerank, ctypes.c_char_p(filter_attribute_b_string), ctypes.c_char_p(filter_approach_b_string))
-    print("response: ", answer)
+    
+    n_repeat_runs = 1
+    data_dim = 300
+    query_indices = [0]
+
+    start_time = time.process_time()
+    index_res = c_lib.build_index(n_attr_partitions, n_clusters, global_dim, rank, train_size, euclidean)
+    print("Index building result: ", index_res)
+    end_time = time.process_time()
+    elapsed_time = end_time - start_time
+    print("Time taken to build index: ", elapsed_time)
+
+
+    start_time = time.process_time()
+    for i in range(n_repeat_runs):
+        for query_index in query_indices:
+            answer = c_lib.filter(query_index*data_dim, exact_search, k, clusters_to_search, points_to_rerank, ctypes.c_char_p(filter_attribute_b_string), ctypes.c_char_p(filter_approach_b_string))
+            print("response: ", answer)
+
+    end_time = time.process_time()
+    elapsed_time = end_time - start_time
+    avg_elapsed_time = elapsed_time / n_repeat_runs
+    print("avg_elapsed_time: ", avg_elapsed_time)
+    

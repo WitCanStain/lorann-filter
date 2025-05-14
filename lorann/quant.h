@@ -341,6 +341,55 @@ struct SQ4Quantizer : SQQuantizer {
       result[j] = sum;
     }
   }
+
+
+inline void matvec_product_B_16_filter(const uint8_t *A, const int8_t *x, float *result,
+                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
+    for (size_t j = 0; j < idxs.size(); ++j) {
+      size_t i = idxs[j];
+      int32_t sum = 0;
+
+      for (int k = 0; k < 8; ++k) {
+        sum += ((int32_t)(A[k + i * 8] >> 4)) * ((int32_t)x[k + 8]);
+        sum += ((int32_t)(A[k + i * 8] & 0xF)) * ((int32_t)x[k]);
+      }
+
+      result[j] = sum;
+    }
+  }
+
+  inline void matvec_product_B_32_filter(const uint8_t *A, const int8_t *x, float *result,
+                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
+    for (size_t j = 0; j < idxs.size(); ++j) {
+      size_t i = idxs[j];
+      int32_t sum = 0;
+
+      for (int k = 0; k < 16; ++k) {
+        sum += ((int32_t)(A[k + i * 16] >> 4)) * ((int32_t)x[k + 16]);
+        sum += ((int32_t)(A[k + i * 16] & 0xF)) * ((int32_t)x[k]);
+      }
+
+      result[j] = sum;
+    }
+  }
+
+  inline void matvec_product_B_64_filter(const uint8_t *A, const int8_t *x, float *result,
+                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
+    for (size_t j = 0; j < idxs.size(); ++j) {
+      size_t i = idxs[j];
+      int32_t sum = 0;
+
+      for (int k = 0; k < 32; ++k) {
+        sum += ((int32_t)(A[k + i * 32] >> 4)) * ((int32_t)x[k + 32]);
+        sum += ((int32_t)(A[k + i * 32] & 0xF)) * ((int32_t)x[k]);
+      }
+
+      result[j] = sum;
+    }
+    }
+  }
+  
+
 #endif
 
   inline void quantized_matvec_product_B(const ColMatrixUInt8 &qA, const VectorInt8 &v,
@@ -357,6 +406,24 @@ struct SQ4Quantizer : SQQuantizer {
       matvec_product_B_16(qA.data(), v.data(), result, rank, qA.cols());
     else
       matvec_product_B_64(qA.data(), v.data(), result, rank, qA.cols());
+
+    scale_result(result, compensation, scales, fix, scale, factor, qA.cols());
+  }
+
+  inline void quantized_matvec_product_B_filter(const ColMatrixUInt8 &qA, const VectorInt8 &v, std::vector<int>* idxs,
+                                         const Vector &correction, const float scale,
+                                         const float factor, const float compensation,
+                                         float *result) const {
+    const float *scales = correction.data();
+    const float *fix = correction.data() + qA.cols();
+
+    const int rank = qA.rows() * 2;
+    if (rank == 32)
+      matvec_product_B_32_filter(qA.data(), v.data(), result, rank, qA.cols());
+    else if (rank == 16)
+      matvec_product_B_16_filter(qA.data(), v.data(), result, rank, qA.cols());
+    else
+      matvec_product_B_64_filter(qA.data(), v.data(), result, rank, qA.cols());
 
     scale_result(result, compensation, scales, fix, scale, factor, qA.cols());
   }

@@ -145,9 +145,16 @@ class Lorann : public LorannBase {
           quantized_query_doubled.cast<float>().sum() * quant_data.compensation_factor;
 
       /* compute r = s^T B */
-      quant_data.quantized_matvec_product_B(B, quantized_query_doubled, B_correction, tmpfact,
-                                            principal_axis_tmp, compensation_tmp,
-                                            &all_distances[curr_cum_cluster_sz]);
+      if (filter_approach === "prefilter") {
+        quant_data.quantized_matvec_product_B_filter(B, quantized_query_doubled, B_correction, tmpfact,
+                                                    principal_axis_tmp, compensation_tmp,
+                                                    &all_distances[curr_cum_cluster_sz]);
+      } else {
+        quant_data.quantized_matvec_product_B(B, quantized_query_doubled, B_correction, tmpfact,
+                                                    principal_axis_tmp, compensation_tmp,
+                                                    &all_distances[curr_cum_cluster_sz]);
+      }
+      
 
       if (_euclidean)
         add_inplace(_cluster_norms[cluster].data(), &all_distances[curr_cum_cluster_sz],

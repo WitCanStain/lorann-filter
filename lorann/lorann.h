@@ -77,13 +77,12 @@ class Lorann : public LorannBase {
     ColVector scaled_query;
     ColVector transformed_query;
     Eigen::Map<const Eigen::VectorXf> data_vec(data, _dim);
-
+// std::cout << "data_vec: " << data_vec << std::endl;
     if (_euclidean) {
       scaled_query = -2. * data_vec;
     } else {
       scaled_query = -data_vec;
     }
-
     /* apply dimensionality reduction to the query */
 #if defined(LORANN_USE_MKL) || defined(LORANN_USE_OPENBLAS)
     transformed_query = Vector(_global_dim);
@@ -93,7 +92,6 @@ class Lorann : public LorannBase {
 #else
     transformed_query = _global_transform.transpose() * scaled_query;
 #endif
-
     const float principal_axis = transformed_query[0];
     transformed_query[0] = 0; /* the first component is treated separately in fp32 precision */
 
@@ -112,22 +110,46 @@ class Lorann : public LorannBase {
                             compensation_query, clusters_to_search, I.data());
 
     const int total_pts = _cluster_sizes(I).sum();
+    
     ColVector all_distances(total_pts);
-    ColVectorInt all_idxs(total_pts);
+    ColVectorInt all_idxs(total_pts); // all_idxs contains the original indexes of all resultant datapoints from the query
     ColVector tmp(_max_rank);
 
-    int curr_cum_sz = 0;
-    int curr_cum_cluster_sz = 0;
-    bool use_attr_indexing = (filter_approach == "indexing");
-    std::cout << "use_attr_indexing: " << use_attr_indexing << std::endl;
+    int current_cumulative_size = 0;
+    // int current_cumulative_cluster_size = 0;
+    bool use_attr_indexing = (filter_approach == "indexing" || filter_approach == "prefilter");
     for (int i = 0; i < clusters_to_search; ++i) {
-      attribute_data_map this_cluster_attribute_data_map = _cluster_attribute_data_maps[i];
-      std::vector<int> attribute_data_idxs = this_cluster_attribute_data_map[filter_attributes];
-      int n_filtered_cluster_datapoints = attribute_data_idxs.size();
+      // std::cout << "searching cluster " << i << std::endl;
       const int cluster = I[i];
       const int sz = _cluster_sizes[cluster];
+      // std::cout << "sz: " << sz << std::endl;
+      std::vector<int> attribute_data_idxs;
+      if (filter_approach == "indexing") {
+        attribute_data_map this_cluster_attribute_data_map = _cluster_attribute_data_maps[cluster];
+        attribute_data_idxs = this_cluster_attribute_data_map[filter_attributes];
+
+
+
+      } else if (filter_approach == "prefilter") {
+        for (int i = 0; i < sz; i++) {
+          if (filter_attributes.find(_attributes[_cluster_map[cluster][i]]) != filter_attributes.end()) {
+            attribute_data_idxs.push_back(_cluster_map[cluster][i]);
+          }
+        }
+      }
+
+      // std::cout << std::endl << "attribute_data_idxs[" << i << "]: " << attribute_data_idxs.size() << std::endl;
+      // for (int i = 0; i < attribute_data_idxs.size(); i++) {
+      //   std::cout << attribute_data_idxs[i] << " ";
+      // }
+      // std::cout << std::endl << "_cluster_map[" << i << "]: " << attribute_data_idxs.size() << std::endl;
+      // for (int i = 0; i < _cluster_map[cluster].size(); i++) {
+      //   std::cout << _cluster_map[cluster][i] << " ";
+      // }
+      
+      int n_filtered_cluster_datapoints = attribute_data_idxs.size();
       // std::cout << "n_filtered_cluster_datapoints: " << n_filtered_cluster_datapoints << std::endl;
-      if (sz == 0 || n_filtered_cluster_datapoints == 0) continue;
+      if (sz == 0 || ( filter_approach != "postfilter" && n_filtered_cluster_datapoints == 0)) continue;
 
       const ColMatrixUInt8 &A = _A[cluster];
       const ColMatrixUInt8 &B = _B[cluster];
@@ -145,71 +167,71 @@ class Lorann : public LorannBase {
           quantized_query_doubled.cast<float>().sum() * quant_data.compensation_factor;
 
       /* compute r = s^T B */
-      if (filter_approach === "prefilter") {
-        quant_data.quantized_matvec_product_B_filter(B, quantized_query_doubled, B_correction, tmpfact,
+      if (filter_approach == "prefilter" || filter_approach == "indexing") {
+        quant_data.quantized_matvec_product_B_filter(B, quantized_query_doubled, &attribute_data_idxs, B_correction, tmpfact,
                                                     principal_axis_tmp, compensation_tmp,
-                                                    &all_distances[curr_cum_cluster_sz]);
+                                                    &all_distances[current_cumulative_size]);
       } else {
         quant_data.quantized_matvec_product_B(B, quantized_query_doubled, B_correction, tmpfact,
                                                     principal_axis_tmp, compensation_tmp,
-                                                    &all_distances[curr_cum_cluster_sz]);
+                                                    &all_distances[current_cumulative_size]);
       }
-      
-
       if (_euclidean)
-        add_inplace(_cluster_norms[cluster].data(), &all_distances[curr_cum_cluster_sz],
+        add_inplace(_cluster_norms[cluster].data(), &all_distances[current_cumulative_size],
                     _cluster_norms[cluster].size());
       
-      std::memcpy(&all_idxs[curr_cum_sz], use_attr_indexing ? attribute_data_idxs.data() : _cluster_map[cluster].data(), use_attr_indexing ? n_filtered_cluster_datapoints * sizeof(int) : sz * sizeof(int));
-      curr_cum_sz += use_attr_indexing ? n_filtered_cluster_datapoints : sz;
-      //   std::memcpy(&all_idxs[curr], _cluster_map[cluster].data(), sz * sizeof(int));  
-      curr_cum_cluster_sz += sz;
+      if (use_attr_indexing) { // when we use indexing, we process fewer results than the full size of the cluster due to filtering them beforehand.
+        std::memcpy(&all_idxs[current_cumulative_size], attribute_data_idxs.data(), attribute_data_idxs.size() * sizeof(int));
+        current_cumulative_size += n_filtered_cluster_datapoints;
+      } else {
+        std::memcpy(&all_idxs[current_cumulative_size], _cluster_map[cluster].data(), sz * sizeof(int));
+        current_cumulative_size += sz;
+      }
       
     }
-    std::cout << "curr_cum_sz: " << curr_cum_sz << std::endl;
-    std::cout << "curr_cum_cluster_sz: " << curr_cum_cluster_sz << std::endl;
-    std::cout << "filter_approach: " << filter_approach << std::endl;
-    // for (int i = 0; i < all_idxs.size(); i++) {
-    //   std::cout << _attributes[all_idxs[i]] << "-" << all_idxs[i] << "|";
-    //   if (_attributes[all_idxs[i]] != "brown") {
-    //     std::cout << "CORRECT DATA STOPS AT INDEX " << i;
-    //     break;
-    //   }
-    // }
-
-    ColVector filtered_distances(curr_cum_sz);
-    // std::cout << "we here: " << curr_cum_sz << std::endl;
-    for (int i = 0; i < curr_cum_sz; i++) {
-      filtered_distances[i] = all_distances[all_idxs[i]];
+    // std::cout << "current_cumulative_size: " << current_cumulative_size << std::endl;
+    
+    ColVector filtered_distances(current_cumulative_size);
+    // std::cout << "filtered_distances.size()" << filtered_distances.size() << std::endl;
+    // std::cout << "all_distances.size()" << all_distances.size() << std::endl;
+    // std::cout << "all_idxs.size()" << all_idxs.size() << std::endl;
+    // std::cout << "we here: " << current_cumulative_size << std::endl;
+    for (int i = 0; i < current_cumulative_size; i++) { // this is needed because all_distances when using indexing will have more reserved memory than there are filtered datapoints so we need to filter it to include only the number of datapoints we want.
+      filtered_distances[i] = all_distances[i];
     }
-    Eigen::VectorXi shuffled_out(k);
-    select_final(_euclidean ? data : scaled_query.data(), k, points_to_rerank, curr_cum_sz,
+    Eigen::VectorXi shuffled_out(k); // why is this needed?
+    // std::cout << "k: " << k << std::endl;
+    // std::cout << "current_cumulative_size: " << current_cumulative_size << std::endl;
+    // std::cout << "points_to_rerank: " << points_to_rerank << std::endl;
+    select_final(_euclidean ? data : scaled_query.data(), k, points_to_rerank, current_cumulative_size,
                  all_idxs.data(), filtered_distances.data(), shuffled_out.data(), dist_out);
     
-    std::cout << "approx search here" << std::endl;
     if (filter_approach == "postfilter") {
       std::vector<int>* matched_idxs = new std::vector<int>();
-      std::cout << "matched_idxs addr 0: " << matched_idxs << std::endl;
+      // std::cout << "_attributes.size(): " << _attributes.size() << std::endl;
       for (int i = 0; i < k; i++) {
+        // std::cout << "shuffled_out[" << i << "]: " << shuffled_out[i] << std::endl;
+      }
+      for (int i = 0; i < k; i++) {
+        // std::cout << "loop " << i << " ";
         if (filter_attributes.find(_attributes[shuffled_out[i]]) != filter_attributes.end()) {
           matched_idxs->push_back(shuffled_out[i]);
         }
       }
       int matched_k = matched_idxs->size();
-      std::cout << "matched_k: " << matched_k << std::endl;
-      std::cout << "k: " << k << std::endl;
-      std::cout << (matched_k < k) << std::endl;
+      // std::cout << "matched_k: " << matched_k << std::endl;
+      // std::cout << "k: " << k << std::endl;
       int new_k = k;
-      if (matched_k < k) {
-        std::cout << "true" << std::endl;
-      }
+      // if (matched_k < k) {
+      //   std::cout << "true" << std::endl;
+      // }
       std::vector<std::vector<int>*> ptr_vec;
       while (matched_k < k) { // if not enough datapoints are found in k results, double it and search again
         new_k = new_k * 2;
         if (new_k > _n_samples) new_k = _n_samples;
-        std::cout << "rerunning select_k with k=" << new_k << std::endl;
+        // std::cout << "rerunning select_k with k=" << new_k << std::endl;
         Eigen::VectorXi new_out(new_k);
-        select_final(_euclidean ? data : scaled_query.data(), new_k, points_to_rerank, curr_cum_sz,
+        select_final(_euclidean ? data : scaled_query.data(), new_k, points_to_rerank, current_cumulative_size,
                  all_idxs.data(), filtered_distances.data(), new_out.data(), dist_out);
         // select_k(new_k, new_out.data(), n_datapoints, NULL, dist.data(), dist_out, true);
         std::vector<int>* new_matched_idxs = new std::vector<int>();
@@ -221,21 +243,21 @@ class Lorann : public LorannBase {
         }
         matched_k = new_matched_idxs->size();
         matched_idxs = new_matched_idxs;
-        std::cout << "new_matched_idxs, first element " << (*new_matched_idxs)[0] << std::endl;
-        std::cout << "matched_idxs, first element " << (*matched_idxs)[0] << std::endl;
-        std::cout << "matched_idxs addr: " << matched_idxs << std::endl;
+        // std::cout << "new_matched_idxs, first element " << (*new_matched_idxs)[0] << std::endl;
+        // std::cout << "matched_idxs, first element " << (*matched_idxs)[0] << std::endl;
+        // std::cout << "matched_idxs addr: " << matched_idxs << std::endl;
         if (new_k == _n_samples) {
           std::cout << "could not find enough samples (found " << matched_k << ")" << std::endl;
           break;
         } 
       }
-      std::cout << "matched_k 2: " << matched_k << std::endl;
-      std::cout << "matched_idxs addr 2: " << matched_idxs << std::endl;
+      // std::cout << "matched_k 2: " << matched_k << std::endl;
+      // std::cout << "matched_idxs addr 2: " << matched_idxs << std::endl;
       if (matched_k >= k) {
         for (int i = 0; i < k; i++) {
-          std::cout << "og idxs: " << (*matched_idxs)[i] << " - ";
+          // std::cout << "og idxs: " << (*matched_idxs)[i] << " - ";
           idx_out[i] = (*matched_idxs)[i];
-          std::cout << "idx_out[" << i << "]:" << idx_out[i] << " ";
+          // std::cout << "idx_out[" << i << "]:" << idx_out[i] << " ";
         }
       }
       for (int i = 0; i < ptr_vec.size(); i++) { // deallocate memory
@@ -248,8 +270,11 @@ class Lorann : public LorannBase {
       // } else {
       //   std::cout << "+++index " << shuffled_out[i] << " IS in all_idxs" << std::endl;
       // }
-      // std::cout << "shuffled_out[i]: " << shuffled_out[i] << std::endl;
-      // std::cout << "all_idxs[shuffled_out[i]]: " << all_idxs[shuffled_out[i]] << std::endl;
+      // std::cout << "shuffled_out[" << i << "]: " << shuffled_out[i] << std::endl;
+      // if (shuffled_out[i] > all_idxs.size()) {
+      //   std::cout << "Cannot print index " << shuffled_out[i] << "of " << all_idxs.size() << std::endl;
+      // }
+      // std::cout << "all_idxs[shuffled_out[" << i << "]]: " << all_idxs[shuffled_out[i]] << std::endl;
       idx_out[i] = shuffled_out[i];
     }
   }

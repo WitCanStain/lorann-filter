@@ -83,8 +83,8 @@ static inline float dot_product(const float *x1, const float *x2, size_t length)
 
   size_t i;
   for (i = 0; i + 7 < length; i += 8) {
-    __m256 v1 = _mm256_load_ps(x1 + i);
-    __m256 v2 = _mm256_load_ps(x2 + i);
+    __m256 v1 = _mm256_loadu_ps(x1 + i);
+    __m256 v2 = _mm256_loadu_ps(x2 + i);
     sum = _mm256_fmadd_ps(v1, v2, sum);
   }
 
@@ -104,8 +104,8 @@ static inline float dot_product(const float *x1, const float *x2, size_t length)
 
   size_t i;
   for (i = 0; i + 7 < length; i += 8) {
-    __m256 v1 = _mm256_load_ps(x1 + i);
-    __m256 v2 = _mm256_load_ps(x2 + i);
+    __m256 v1 = _mm256_loadu_ps(x1 + i);
+    __m256 v2 = _mm256_loadu_ps(x2 + i);
     __m256 prod = _mm256_mul_ps(v1, v2);
     sum = _mm256_add_ps(sum, prod);
   }
@@ -195,8 +195,8 @@ static inline float squared_euclidean(const float *x1, const float *x2, size_t l
 
   size_t i;
   for (i = 0; i + 7 < length; i += 8) {
-    __m256 v1 = _mm256_load_ps(x1 + i);
-    __m256 v2 = _mm256_load_ps(x2 + i);
+    __m256 v1 = _mm256_loadu_ps(x1 + i);
+    __m256 v2 = _mm256_loadu_ps(x2 + i);
     __m256 diff = _mm256_sub_ps(v1, v2);
     sum = _mm256_fmadd_ps(diff, diff, sum);
   }
@@ -218,8 +218,8 @@ static inline float squared_euclidean(const float *x1, const float *x2, size_t l
 
   size_t i;
   for (i = 0; i + 7 < length; i += 8) {
-    __m256 v1 = _mm256_load_ps(x1 + i);
-    __m256 v2 = _mm256_load_ps(x2 + i);
+    __m256 v1 = _mm256_loadu_ps(x1 + i);
+    __m256 v2 = _mm256_loadu_ps(x2 + i);
     __m256 diff = _mm256_sub_ps(v1, v2);
     __m256 squared = _mm256_mul_ps(diff, diff);
     sum = _mm256_add_ps(sum, squared);
@@ -345,7 +345,7 @@ static inline float compute_quantization_factor(const float *v, const int len, c
 }
 
 static void select_k(const int k, int *labels, const int k_base, const int *base_labels,
-                     const float *base_distances, float *distances = nullptr, bool sorted = false) {
+                     const float *base_distances, float *distances = nullptr, bool sorted = false) { // labels = final_select, k_base=size=current_cumulative_size, base_labels = all_idxs, base_distances = all_distances
   if (k >= k_base) {
     if (base_labels != NULL) {
       for (int i = 0; i < k_base; ++i) {
@@ -377,8 +377,14 @@ static void select_k(const int k, int *labels, const int k_base, const int *base
   } else {
     miniselect::pdqselect_branchless(perm.begin(), perm.begin() + k, perm.end(), comp);
   }
+  // std::cout << "perm: " << std::endl;  
+  // for (int i = 0; i<k_base; i++) {
+  //   std::cout << perm[i] << " ";  
+  // }
+  // std::cout << "k is: " << k << std::endl;
   if (base_labels != NULL) {
     for (int i = 0; i < k; ++i) {
+      // std::cout << "perm["<<i<<"]: " << perm[i] << " - base_labels["<<perm[i]<<"]: " << base_labels[perm[i]] << std::endl;
       labels[i] = base_labels[perm[i]];
     }
   } else {

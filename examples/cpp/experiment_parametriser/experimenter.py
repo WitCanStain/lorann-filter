@@ -16,7 +16,7 @@ if __name__ == "__main__":
     euclidean = True
     clusters_to_search = 64
     points_to_rerank = 2000
-    exact_search = True
+    exact_search = False
 
     c_lib.build_index.restype = ctypes.c_bool
     c_lib.build_index.argtypes = ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool
@@ -26,15 +26,14 @@ if __name__ == "__main__":
 
     
     
-    filter_attribute = "brown"
+    filter_attribute = "yellow"
     filter_approach = "postfilter"
-    query_index = 0
     filter_attribute_b_string = filter_attribute.encode('utf-8')
     filter_approach_b_string = filter_approach.encode('utf-8')
     
     n_repeat_runs = 1
     data_dim = 300
-    query_indices = [0]
+    query_indices = [30000]#[i for i in range(400,500)]
 
     start_time = time.process_time()
     index_res = c_lib.build_index(n_attr_partitions, n_clusters, global_dim, rank, train_size, euclidean)
@@ -47,11 +46,11 @@ if __name__ == "__main__":
     start_time = time.process_time()
     for i in range(n_repeat_runs):
         for query_index in query_indices:
-            answer = c_lib.filter(query_index*data_dim, exact_search, k, clusters_to_search, points_to_rerank, ctypes.c_char_p(filter_attribute_b_string), ctypes.c_char_p(filter_approach_b_string))
-            print("response: ", answer)
+            answer = c_lib.filter(query_index, exact_search, k, clusters_to_search, points_to_rerank, ctypes.c_char_p(filter_attribute_b_string), ctypes.c_char_p(filter_approach_b_string))
+            # print("response: ", answer)
 
     end_time = time.process_time()
     elapsed_time = end_time - start_time
-    avg_elapsed_time = elapsed_time / n_repeat_runs
+    avg_elapsed_time = elapsed_time / (n_repeat_runs * len(query_indices))
     print("avg_elapsed_time: ", avg_elapsed_time)
     

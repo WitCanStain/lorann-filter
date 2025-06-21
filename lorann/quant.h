@@ -4,7 +4,7 @@
 
 namespace Lorann {
 
-#if defined(__AVX2__)
+#if false //defined(__AVX2__)
 
 #define MM256_SET_M128I(a, b) _mm256_insertf128_si256(_mm256_castsi128_si256(b), (a), 1)
 #define MM512_SET_M256I(a, b) _mm512_inserti64x4(_mm512_castsi256_si512(b), (a), 1)
@@ -139,7 +139,7 @@ struct SQ4Quantizer : SQQuantizer {
   static constexpr int compensation_factor = 8;
   static constexpr int div_factor = 2;
 
-#if defined(__AVX2__)
+#if false //defined(__AVX2__)
 
   inline void matvec_product_A(const uint8_t *A, const int8_t *x, float *result, const size_t rows,
                                const size_t cols) const {
@@ -176,9 +176,39 @@ struct SQ4Quantizer : SQQuantizer {
     }
   }
 
+  void matvec_product_B_16_filter(const uint8_t *A, const int8_t *x, float *result,
+                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
+    const __m128i vec_chunk = _mm_loadu_si128((const __m128i *)(x));
+    for (size_t j = 0; j < cols; ++j) {
+      const __m128i col_chunk = unpack128(A + j * 8);
+      const __m128i sum = dpbusd(col_chunk, vec_chunk);
+      result[j] = horizontal_add(sum);
+    }
+  }
+
+  void matvec_product_B_32_filter(const uint8_t *A, const int8_t *x, float *result,
+                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
+    const __m256i vec_chunk = _mm256_loadu_si256((const __m256i *)(x));
+    for (size_t j = 0; j < cols; ++j) {
+      const __m256i col_chunk = unpack256(A + j * 16);
+      const __m256i sum = dpbusd(col_chunk, vec_chunk);
+      result[j] = horizontal_add(sum);
+    }
+  }
+
 #if defined(__AVXVNNI__) || (defined(__AVX512VNNI__) && defined(__AVX512VL__))
   void matvec_product_B_64(const uint8_t *A, const int8_t *x, float *result, const size_t rows,
                            const size_t cols) const {
+    const __m512i vec_chunk = _mm512_loadu_si512((const __m512i *)(x));
+    for (size_t j = 0; j < cols; ++j) {
+      const __m512i col_chunk = unpack512(A + j * 32);
+      const __m512i sum = dpbusd(col_chunk, vec_chunk);
+      result[j] = _mm512_reduce_add_epi32(sum);
+    }
+  }
+
+  void matvec_product_B_64_filter(const uint8_t *A, const int8_t *x, float *result,
+                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
     const __m512i vec_chunk = _mm512_loadu_si512((const __m512i *)(x));
     for (size_t j = 0; j < cols; ++j) {
       const __m512i col_chunk = unpack512(A + j * 32);
@@ -200,8 +230,22 @@ struct SQ4Quantizer : SQQuantizer {
       result[j] = sum;
     }
   }
+
+  void matvec_product_B_64_filter(const uint8_t *A, const int8_t *x, float *result,
+                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
+    for (size_t j = 0; j < cols; ++j) {
+      int32_t sum = 0;
+
+      for (int k = 0; k < 32; ++k) {
+        sum += ((int32_t)(A[k + j * 32] >> 4)) * ((int32_t)x[k + 32]);
+        sum += ((int32_t)(A[k + j * 32] & 0xF)) * ((int32_t)x[k]);
+      }
+
+      result[j] = sum;
+    }
+  }
 #endif
-#elif (defined(__ARM_NEON) || defined(__ARM_NEON__)) && defined(__ARM_FEATURE_DOTPROD)
+#elif (false) //defined(__ARM_NEON) || defined(__ARM_NEON__)) && defined(__ARM_FEATURE_DOTPROD
   inline void matvec_product_A(const uint8_t *A, const int8_t *x, float *result, const size_t rows,
                                const size_t cols) const {
     for (size_t j = 0; j < cols; ++j) {
@@ -283,6 +327,68 @@ struct SQ4Quantizer : SQQuantizer {
       result[j] = sum;
     }
   }
+
+
+  inline void matvec_product_B_16_filter(const uint8_t *A, const int8_t *x, float *result,
+                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
+    for (size_t j = 0; j < cols; ++j) {
+      int32x4_t sum_vec = vdupq_n_s32(0);
+
+      const int8x8_t x_low = vld1_s8(x);
+      const int8x8_t x_high = vld1_s8(x + 8);
+
+      const uint8x8_t a_vec = vld1_u8(A + j * 8);
+      const uint8x8_t a_high = vshr_n_u8(a_vec, 4);
+      const uint8x8_t a_low = vand_u8(a_vec, vdup_n_u8(0x0F));
+
+      const int16x8_t x_low_16 = vmovl_s8(x_low);
+      const int16x8_t x_high_16 = vmovl_s8(x_high);
+      const int16x8_t a_high_16 = vreinterpretq_s16_u16(vmovl_u8(a_high));
+      const int16x8_t a_low_16 = vreinterpretq_s16_u16(vmovl_u8(a_low));
+
+      sum_vec =
+          vdotq_s32(sum_vec, vreinterpretq_s32_s16(a_low_16), vreinterpretq_s32_s16(x_low_16));
+      sum_vec =
+          vdotq_s32(sum_vec, vreinterpretq_s32_s16(a_high_16), vreinterpretq_s32_s16(x_high_16));
+
+      result[j] = vaddvq_s32(sum_vec);
+    }
+  }
+
+  inline void matvec_product_B_32_filter(const uint8_t *A, const int8_t *x, float *result,
+                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
+    const int8x16_t x_val_high = vld1q_s8(&x[16]);
+    const int8x16_t x_val_low = vld1q_s8(&x[0]);
+
+    for (size_t j = 0; j < cols; ++j) {
+      int32x4_t sum_vec = vdupq_n_s32(0);
+
+      const uint8x16_t a_vec = vld1q_u8(&A[j * 16]);
+      const uint8x16_t a_high_u8 = vshrq_n_u8(a_vec, 4);
+      const uint8x16_t a_low_u8 = vandq_u8(a_vec, vdupq_n_u8(0x0F));
+      const int8x16_t a_high_s8 = vreinterpretq_s8_u8(a_high_u8);
+      const int8x16_t a_low_s8 = vreinterpretq_s8_u8(a_low_u8);
+
+      sum_vec = vdotq_s32(sum_vec, a_high_s8, x_val_high);
+      sum_vec = vdotq_s32(sum_vec, a_low_s8, x_val_low);
+
+      result[j] = vaddvq_s32(sum_vec);
+    }
+  }
+
+  inline void matvec_product_B_64_filter(const uint8_t *A, const int8_t *x, float *result,
+                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
+    for (size_t j = 0; j < cols; ++j) {
+      int32_t sum = 0;
+
+      for (int k = 0; k < 32; ++k) {
+        sum += ((int32_t)(A[k + j * 32] >> 4)) * ((int32_t)x[k + 32]);
+        sum += ((int32_t)(A[k + j * 32] & 0xF)) * ((int32_t)x[k]);
+      }
+
+      result[j] = sum;
+    }
+  }
 #else
   inline void matvec_product_A(const uint8_t *A, const int8_t *x, float *result, const size_t rows,
                                const size_t cols) const {
@@ -343,10 +449,10 @@ struct SQ4Quantizer : SQQuantizer {
   }
 
 
-inline void matvec_product_B_16_filter(const uint8_t *A, const int8_t *x, float *result,
+  inline void matvec_product_B_16_filter(const uint8_t *A, const int8_t *x, float *result,
                                   const size_t rows, const size_t cols, std::vector<int>* idxs) const {
-    for (size_t j = 0; j < idxs.size(); ++j) {
-      size_t i = idxs[j];
+    for (size_t j = 0; j < (*idxs).size(); ++j) {
+      size_t i = (*idxs)[j];
       int32_t sum = 0;
 
       for (int k = 0; k < 8; ++k) {
@@ -360,8 +466,8 @@ inline void matvec_product_B_16_filter(const uint8_t *A, const int8_t *x, float 
 
   inline void matvec_product_B_32_filter(const uint8_t *A, const int8_t *x, float *result,
                                   const size_t rows, const size_t cols, std::vector<int>* idxs) const {
-    for (size_t j = 0; j < idxs.size(); ++j) {
-      size_t i = idxs[j];
+    for (size_t j = 0; j < (*idxs).size(); ++j) {
+      size_t i = (*idxs)[j];
       int32_t sum = 0;
 
       for (int k = 0; k < 16; ++k) {
@@ -375,8 +481,8 @@ inline void matvec_product_B_16_filter(const uint8_t *A, const int8_t *x, float 
 
   inline void matvec_product_B_64_filter(const uint8_t *A, const int8_t *x, float *result,
                                   const size_t rows, const size_t cols, std::vector<int>* idxs) const {
-    for (size_t j = 0; j < idxs.size(); ++j) {
-      size_t i = idxs[j];
+    for (size_t j = 0; j < (*idxs).size(); ++j) {
+      size_t i = (*idxs)[j];
       int32_t sum = 0;
 
       for (int k = 0; k < 32; ++k) {
@@ -387,7 +493,7 @@ inline void matvec_product_B_16_filter(const uint8_t *A, const int8_t *x, float 
       result[j] = sum;
     }
     }
-  }
+  
   
 
 #endif
@@ -416,14 +522,14 @@ inline void matvec_product_B_16_filter(const uint8_t *A, const int8_t *x, float 
                                          float *result) const {
     const float *scales = correction.data();
     const float *fix = correction.data() + qA.cols();
-
+    // std::cout << " using sq4quantizer" << std::endl;
     const int rank = qA.rows() * 2;
     if (rank == 32)
-      matvec_product_B_32_filter(qA.data(), v.data(), result, rank, qA.cols());
+      matvec_product_B_32_filter(qA.data(), v.data(), result, rank, qA.cols(), idxs);
     else if (rank == 16)
-      matvec_product_B_16_filter(qA.data(), v.data(), result, rank, qA.cols());
+      matvec_product_B_16_filter(qA.data(), v.data(), result, rank, qA.cols(), idxs);
     else
-      matvec_product_B_64_filter(qA.data(), v.data(), result, rank, qA.cols());
+      matvec_product_B_64_filter(qA.data(), v.data(), result, rank, qA.cols(), idxs);
 
     scale_result(result, compensation, scales, fix, scale, factor, qA.cols());
   }
@@ -492,7 +598,7 @@ struct SQ8Quantizer : SQQuantizer {
   static constexpr int compensation_factor = 128;
   static constexpr int div_factor = 1;
 
-#if defined(__AVX2__)
+#if false //defined(__AVX2__)
   inline void matvec_product_A(const uint8_t *A, const int8_t *x, float *result, const size_t rows,
                                const size_t cols) const {
     for (size_t j = 0; j < cols; ++j) {
@@ -528,6 +634,26 @@ struct SQ8Quantizer : SQQuantizer {
     }
   }
 
+  void matvec_product_B_16_filter(const uint8_t *A, const int8_t *x, float *result,
+                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
+    const __m128i vec_chunk = _mm_loadu_si128((const __m128i *)(x));
+    for (size_t j = 0; j < cols; ++j) {
+      const __m128i col_chunk = _mm_loadu_si128((const __m128i *)(A + j * 16));
+      const __m128i sum = dpbusd(col_chunk, vec_chunk);
+      result[j] = horizontal_add(sum);
+    }
+  }
+
+  void matvec_product_B_32_filter(const uint8_t *A, const int8_t *x, float *result,
+                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
+    const __m256i vec_chunk = _mm256_loadu_si256((const __m256i *)(x));
+    for (size_t j = 0; j < cols; ++j) {
+      const __m256i col_chunk = _mm256_loadu_si256((const __m256i *)(A + j * 32));
+      const __m256i sum = dpbusd(col_chunk, vec_chunk);
+      result[j] = horizontal_add(sum);
+    }
+  }
+
 #if defined(__AVXVNNI__) || (defined(__AVX512VNNI__) && defined(__AVX512VL__))
   void matvec_product_B_64(const uint8_t *A, const int8_t *x, float *result, const size_t rows,
                            const size_t cols) const {
@@ -541,6 +667,10 @@ struct SQ8Quantizer : SQQuantizer {
 #else
   void matvec_product_B_64(const uint8_t *A, const int8_t *x, float *result, const size_t rows,
                            const size_t cols) const {
+    matvec_product_A(A, x, result, rows, cols);
+  }
+  void matvec_product_B_64_filter(const uint8_t *A, const int8_t *x, float *result,
+                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
     matvec_product_A(A, x, result, rows, cols);
   }
 #endif
@@ -572,6 +702,21 @@ struct SQ8Quantizer : SQQuantizer {
                                   const size_t rows, const size_t cols) const {
     matvec_product_A(A, x, result, rows, cols);
   }
+
+  inline void matvec_product_B_16_filter(const uint8_t *A, const int8_t *x, float *result,
+                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
+    matvec_product_A(A, x, result, rows, cols);
+  }
+
+  inline void matvec_product_B_32_filter(const uint8_t *A, const int8_t *x, float *result,
+                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
+    matvec_product_A(A, x, result, rows, cols);
+  }
+
+  inline void matvec_product_B_64_filter(const uint8_t *A, const int8_t *x, float *result,
+                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
+    matvec_product_A(A, x, result, rows, cols);
+  }
 #endif
 
   inline void quantized_matvec_product_B(const ColMatrixUInt8 &qA, const VectorInt8 &v,
@@ -592,6 +737,25 @@ struct SQ8Quantizer : SQQuantizer {
     scale_result(result, compensation, scales, fix, scale, factor, qA.cols());
   }
 
+  inline void quantized_matvec_product_B_filter(const ColMatrixUInt8 &qA, const VectorInt8 &v, std::vector<int>* idxs,
+                                         const Vector &correction, const float scale,
+                                         const float factor, const float compensation,
+                                         float *result) const {
+    const float *scales = correction.data();
+    const float *fix = correction.data() + qA.cols();
+    std::cout << " using sq8quantizer" << std::endl;
+    const int rank = qA.rows() * 2;
+    if (rank == 32)
+      matvec_product_B_32_filter(qA.data(), v.data(), result, rank, qA.cols(), idxs);
+    else if (rank == 16)
+      matvec_product_B_16_filter(qA.data(), v.data(), result, rank, qA.cols(), idxs);
+    else
+      matvec_product_B_64_filter(qA.data(), v.data(), result, rank, qA.cols(), idxs);
+
+    scale_result(result, compensation, scales, fix, scale, factor, qA.cols());
+  }
+
+  
   inline void quantized_matvec_product_A(const ColMatrixUInt8 &qA, const VectorInt8 &v,
                                          const Vector &correction, const float scale,
                                          const float factor, const float compensation,

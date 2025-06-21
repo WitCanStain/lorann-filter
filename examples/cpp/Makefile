@@ -12,6 +12,8 @@ prepare-data:
 example:
 	$(CXX) -std=c++17 -O3 -march=native -fopenmp -DNDEBUG -I../../lorann -flax-vector-conversions example.cpp -o example -lgomp
 
+filterdb:
+	$(CXX) -std=c++17 -march=native -fopenmp -DNDEBUG -I../../lorann -flax-vector-conversions filter.cpp -o filterdb -lgomp -g
 filter:
 	$(CXX) -std=c++17 -O3 -march=native -fopenmp -DNDEBUG -I../../lorann -flax-vector-conversions filter.cpp -o libfilter.so -lgomp -fPIC -shared
 	

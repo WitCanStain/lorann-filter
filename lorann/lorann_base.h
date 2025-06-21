@@ -136,18 +136,17 @@ class LorannBase {
   void exact_search(const float *q, int k, int *out, const std::set<std::string>& filter_attributes, std::string filter_approach, float *dist_out = nullptr) const {
     float *data_ptr = _data;
     // float *data_ptr;
-    std::cout << "running exact search with " << filter_approach << " strategy and k: " << k << std::endl;
     int n_datapoints;
-    Vector dist(_n_samples);
     std::vector<int> attribute_data_idxs;
     if (filter_approach == "indexing") {
       attribute_data_idxs = _attribute_data_map[filter_attributes];
       n_datapoints = attribute_data_idxs.size();
-      std::cout << "n_datapoints: " << n_datapoints << std::endl;
+      // std::cout << "n_datapoints: " << n_datapoints << std::endl;
       // for (int i = 0; i < 10; i++) {
       //   // std::cout << "dp idx: " << attribute_data_idxs[i] << std::endl;
       //   // std::cout << "dp attr: " << _attributes[attribute_data_idxs[i]] << " ";
       // }
+      // std::cout << "n_datapoints: " << n_datapoints << std::endl;
     } else if (filter_approach == "prefilter") {
       for (int i = 0; i < _n_samples; i++) {
         if (filter_attributes.find(_attributes[i]) != filter_attributes.end()) {
@@ -160,16 +159,24 @@ class LorannBase {
     } else {
       throw std::invalid_argument("filter_approach must be one of 'indexing', 'prefilter', or 'postfilter'");
     }
-    
+    Vector dist(n_datapoints); // used to be above conditional
+    // std::cout << "dist size: " << dist.size() << std::endl;
     if (_euclidean) {
       for (int i = 0; i < n_datapoints; ++i) {
+        // std::cout << "curr i: " << i << std::endl;
+        // std::cout << "attribute_data_idxs[i]: " << attribute_data_idxs[i] << std::endl;
+        // std::cout << "data_ptr + attribute_data_idxs[i] * _dim: " << data_ptr + ((filter_approach == "postfilter") ? i : attribute_data_idxs[i]) * _dim << std::endl;
+        // std::cout << "q: " << q << std::endl;
+        // std::cout << "_dim: " << _dim << std::endl;
         dist[i] = squared_euclidean(q, data_ptr + ((filter_approach == "postfilter") ? i : attribute_data_idxs[i]) * _dim, _dim);
+        // std::cout << "past euc" << std::endl;
       }
     } else {
       for (int i = 0; i < n_datapoints; ++i) {
         dist[i] = -dot_product(q, data_ptr + ((filter_approach == "postfilter") ? i : attribute_data_idxs[i]) * _dim, _dim);
       }
     }
+    // std::cout << "we here 1" << std::endl;
 
     /* optimization for the special case k = 1 */
     if (k == 1) {
@@ -185,28 +192,29 @@ class LorannBase {
       k = n_datapoints;
     }
     Eigen::VectorXi shuffled_out(k);
+    // std::cout << "we here 2" << std::endl;
     select_k(k, shuffled_out.data(), n_datapoints, NULL, dist.data(), dist_out, true);
+    // std::cout << "we here 3" << std::endl;
     if (filter_approach == "postfilter") {
       std::vector<int>* matched_idxs = new std::vector<int>();
-      std::cout << "matched_idxs addr 0: " << matched_idxs << std::endl;
+      // std::cout << "matched_idxs addr 0: " << matched_idxs << std::endl;
       for (int i = 0; i < k; i++) {
         if (filter_attributes.find(_attributes[shuffled_out[i]]) != filter_attributes.end()) {
           matched_idxs->push_back(shuffled_out[i]);
         }
       }
       int matched_k = matched_idxs->size();
-      std::cout << "matched_k: " << matched_k << std::endl;
-      std::cout << "k: " << k << std::endl;
-      std::cout << (matched_k < k) << std::endl;
+      // std::cout << "matched_k: " << matched_k << std::endl;
+      // std::cout << "k: " << k << std::endl;
       int new_k = k;
-      if (matched_k < k) {
-        std::cout << "true" << std::endl;
-      }
+      // if (matched_k < k) {
+      //   std::cout << "true" << std::endl;
+      // }
       std::vector<std::vector<int>*> ptr_vec;
       while (matched_k < k) { // if not enough datapoints are found in k results, double it and search again
         new_k = new_k * 2;
         if (new_k > _n_samples) new_k = _n_samples;
-        std::cout << "rerunning select_k with k=" << new_k << std::endl;
+        // std::cout << "rerunning select_k with k=" << new_k << std::endl;
         Eigen::VectorXi new_out(new_k);
         select_k(new_k, new_out.data(), n_datapoints, NULL, dist.data(), dist_out, true);
         std::vector<int>* new_matched_idxs = new std::vector<int>();
@@ -218,21 +226,21 @@ class LorannBase {
         }
         matched_k = new_matched_idxs->size();
         matched_idxs = new_matched_idxs;
-        std::cout << "new_matched_idxs, first element " << (*new_matched_idxs)[0] << std::endl;
-        std::cout << "matched_idxs, first element " << (*matched_idxs)[0] << std::endl;
-        std::cout << "matched_idxs addr: " << matched_idxs << std::endl;
+        // std::cout << "new_matched_idxs, first element " << (*new_matched_idxs)[0] << std::endl;
+        // std::cout << "matched_idxs, first element " << (*matched_idxs)[0] << std::endl;
+        // std::cout << "matched_idxs addr: " << matched_idxs << std::endl;
         if (new_k == _n_samples) {
           std::cout << "could not find enough samples (found " << matched_k << ")" << std::endl;
           break;
         } 
       }
-      std::cout << "matched_k 2: " << matched_k << std::endl;
-      std::cout << "matched_idxs addr 2: " << matched_idxs << std::endl;
+      // std::cout << "matched_k 2: " << matched_k << std::endl;
+      // std::cout << "matched_idxs addr 2: " << matched_idxs << std::endl;
       if (matched_k >= k) {
         for (int i = 0; i < k; i++) {
-          std::cout << "og idxs: " << (*matched_idxs)[i] << " - ";
+          // std::cout << "og idxs: " << (*matched_idxs)[i] << " - ";
           out[i] = (*matched_idxs)[i];
-          std::cout << "out[" << i << "]:" << out[i] << " ";
+          // std::cout << "out[" << i << "]:" << out[i] << " ";
         }
       }
       for (int i = 0; i < ptr_vec.size(); i++) { // deallocate memory
@@ -255,18 +263,17 @@ class LorannBase {
   /* default constructor should only be used for serialization */
   LorannBase() = default;
 
-  void select_final(const float *x, const int k, const int points_to_rerank, const int s,
+  void select_final(const float *query_x, const int k, const int points_to_rerank, const int size,
                     const int *all_idxs, const float *all_distances, int *idx_out,
                     float *dist_out) const {
-    const int n_selected = std::min(std::max(k, points_to_rerank), s);
-    std::cout << "n_selected: " << n_selected << std::endl;
+    const int n_selected = std::min(std::max(k, points_to_rerank), size);
     if (points_to_rerank == 0) {
-      select_k(n_selected, idx_out, s, all_idxs, all_distances, dist_out, true);
+      select_k(n_selected, idx_out, size, all_idxs, all_distances, dist_out, true);
 
       if (dist_out && _euclidean) {
         float query_norm = 0;
         for (int i = 0; i < _dim; ++i) {
-          query_norm += x[i] * x[i];
+          query_norm += query_x[i] * query_x[i];
         }
         for (int i = 0; i < n_selected; ++i) {
           dist_out[i] += query_norm;
@@ -281,8 +288,8 @@ class LorannBase {
       return;
     }
     std::vector<int> final_select(n_selected);
-    select_k(n_selected, final_select.data(), s, all_idxs, all_distances); // by the end of this function call final_select has the actual indexes of the datapoints in attributes vector
-    reorder_exact(x, k, final_select, idx_out, dist_out);
+    select_k(n_selected, final_select.data(), size, all_idxs, all_distances); // by the end of this function call final_select has the actual indexes of the datapoints in attributes vector
+    reorder_exact(query_x, k, final_select, idx_out, dist_out);
   }
 
   void reorder_exact(const float *q, int k, const std::vector<int> &in, int *out,
@@ -309,12 +316,14 @@ class LorannBase {
       if (dist_out) dist_out[0] = dist[index];
       return;
     }
-    std::cout << "reorder_exact n: " << n << std::endl;
+    // std::cout << "reorder_exact n: " << n << std::endl;
     const int final_k = k;
     if (k > n) {
       k = n;
     }
-
+    // for (int i = 0; i < in.size(); i++) {
+    //   std::cout << "r["<<i<<"]: " << in[i] << " ";
+    // }
     select_k(k, out, in.size(), in.data(), dist.data(), dist_out, true);
     for (int i = k; i < final_k; ++i) {
       out[i] = -1;

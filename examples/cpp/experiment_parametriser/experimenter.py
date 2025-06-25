@@ -8,6 +8,7 @@ if __name__ == "__main__":
     libname = pathlib.Path().absolute() / "../libfilter.so"
     c_lib = ctypes.CDLL(libname)
     k = 10
+    n_input_vecs=100000
     n_attr_partitions = 10
     n_clusters = 1024
     global_dim = 256
@@ -19,7 +20,7 @@ if __name__ == "__main__":
     exact_search = False
 
     c_lib.build_index.restype = ctypes.c_bool
-    c_lib.build_index.argtypes = ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool
+    c_lib.build_index.argtypes = ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool
     
     c_lib.filter.restype = ndpointer(dtype=ctypes.c_int, shape=(k,))
     c_lib.filter.argtypes = ctypes.c_int, ctypes.c_bool, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p
@@ -27,16 +28,16 @@ if __name__ == "__main__":
     
     
     filter_attribute = "yellow"
-    filter_approach = "postfilter"
+    filter_approach = "indexing"
     filter_attribute_b_string = filter_attribute.encode('utf-8')
     filter_approach_b_string = filter_approach.encode('utf-8')
     
     n_repeat_runs = 1
     data_dim = 300
-    query_indices = [30000]#[i for i in range(400,500)]
+    query_indices = [i for i in range(4100,4150)]#[i for i in range(400,500)]
 
     start_time = time.process_time()
-    index_res = c_lib.build_index(n_attr_partitions, n_clusters, global_dim, rank, train_size, euclidean)
+    index_res = c_lib.build_index(n_attr_partitions, n_input_vecs, n_clusters, global_dim, rank, train_size, euclidean)
     print("Index building result: ", index_res)
     end_time = time.process_time()
     elapsed_time = end_time - start_time

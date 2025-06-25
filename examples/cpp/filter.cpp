@@ -11,33 +11,27 @@
 typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> RowMatrix;
 std::vector<std::string> attributes;
 const int n_attributes = 10;
-const int n_input_vecs = 50000; //999994
+// const int n_input_vecs = 50000; //999994
 std::vector<std::string> attribute_strings = {"red", "green", "blue", "yellow", "orange", "purple", "black", "white", "pink", "brown"};
 std::random_device rd; // obtain a random number from hardware
 std::mt19937 gen(42); // seed the generator
 std::uniform_int_distribution<> distr(0, n_attributes-1); // define the range
 
 std::vector<int> findUnion(Eigen::VectorXi& a, Eigen::VectorXi& b) {
-  	std::unordered_set<int> st;  
-  
-    // Put all elements of a[] in st
-    for (int i = 0; i < a.size(); i++) 
-      	st.insert(a[i]);
+    std::sort(a.begin(), a.end());
+    std::sort(b.begin(), b.end());
   	
-  	// Put all elements of b[] in st
-    for (int i = 0; i < b.size(); i++) 
-      	st.insert(b[i]);
-  	
-    std::vector<int> res;                            
-  	
-  	// iterate through the set to fill the result array 
-  	for(auto it: st) 
-      	res.push_back(it);
+    std::vector<int> result;
     
-    return res;
+    std::set_intersection(a.begin(), a.end(),
+                          b.begin(), b.end(),
+                          std::back_inserter(result));
+  	
+    return result;
 }
 
-RowMatrix* load_vectors() {
+RowMatrix* load_vectors(int n_input_vecs=999994) {
+  // std::cout << "Using " << n_input_vecs << " input vectors." << std::endl;
   std::ios::sync_with_stdio(false);
   attributes.reserve(n_input_vecs); //999994
   std::ifstream fin("wiki-news-300d-1M.vec");
@@ -78,9 +72,9 @@ Lorann::Lorann<Lorann::SQ4Quantizer>* index_ptr = nullptr;
 RowMatrix* Q_ptr;
 
 extern "C" {
-  bool build_index(int n_attr_partitions, int n_clusters, int global_dim, int rank, int train_size, bool euclidean) {
+  bool build_index(int n_attr_partitions, int n_input_vecs, int n_clusters, int global_dim, int rank, int train_size, bool euclidean) {
     std::cout << "Loading data..." << std::endl;
-    RowMatrix* X = load_vectors();
+    RowMatrix* X = load_vectors(n_input_vecs);
     Q_ptr = X;
     // RowMatrix Q = X.topRows(1000);
     // Q_ptr =  new RowMatrix(X->topRows(100000));
@@ -118,7 +112,7 @@ int* filter(int q_idx, bool exact_search, int k,  int clusters_to_search, int po
   // std::cout << "Q cols: " << Q.cols() << std::endl;
 
   // std::cout << "Querying the index using exact search..." << std::endl;
-  std::cout << "running exact search with " << filter_approach << " strategy and k: " << k << std::endl;
+  // std::cout << "running exact search with " << filter_approach << " strategy and k: " << k << std::endl;
   index.exact_search((*Q_ptr).row(q_idx).data(), k, exact_indices.data(), filter_attributes, filter_approach);
   
   for (const auto& idx : exact_indices) {
@@ -126,27 +120,25 @@ int* filter(int q_idx, bool exact_search, int k,  int clusters_to_search, int po
   }
   std::cout << std::endl;
   // std::cout << std::endl << "Querying the index using approximate search..." << std::endl;
-    std::cout << "running approximate search with " << filter_approach << " strategy and k: " << k << std::endl;
+    // std::cout << "running approximate search with " << filter_approach << " strategy and k: " << k << std::endl;
   index.search((*Q_ptr).row(q_idx).data(), k, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_approach);
-  std::cout << "exact search results:" << std::endl;
+  // std::cout << "exact search results:" << std::endl;
   std::cout << exact_indices.transpose() << std::endl;
-  std::cout << "approx search results:" << std::endl;
+  // std::cout << "approx search results:" << std::endl;
   std::cout << approx_indices.transpose() << std::endl;
-  for (const auto& idx : approx_indices) {
-    std::cout << attributes[idx] << " ";
-  }
-  for (const auto& idx : exact_indices) {
-    std::cout << attributes[idx] << " ";
-  }
+  // for (const auto& idx : approx_indices) {
+  //   std::cout << attributes[idx] << " ";
+  // }
+  // for (const auto& idx : exact_indices) {
+  //   std::cout << attributes[idx] << " ";
+  // }
   std::cout << std::endl;
   std::vector<int> res_union = findUnion(exact_indices, approx_indices);
-  // std::cout << "res_union size: " << res_union.size() << std::endl;
-  // std::cout << "res_union:" << std::endl;
-  // for (int i = 0; i < res_union.size(); i++) {
-  //   std::cout << res_union[i] << " ";
-  // }
-  // std::cout << std::endl;
-  // std::cout << "Recall: " << res_union.size()/double(k) << std::endl;
+  for (int i = 0; i < res_union.size(); i++) {
+    std::cout << res_union[i] << " ";
+  }
+  std::cout << std::endl;
+  std::cout << "Recall: " << res_union.size()/double(k) << std::endl;
   
   // if (exact_search) {
     
@@ -162,7 +154,7 @@ int* filter(int q_idx, bool exact_search, int k,  int clusters_to_search, int po
 }
 
 int main() {
-  bool idx = build_index(10, 1024, 256, 32, 5, true);
+  bool idx = build_index(10, 999994, 1024, 256, 32, 5, true);
   int* ret_val = filter(253, true, 10, 64, 2000, "yellow", "indexing");
   return 0;
 }

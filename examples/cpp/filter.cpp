@@ -31,7 +31,7 @@ std::vector<int> findUnion(Eigen::VectorXi& a, Eigen::VectorXi& b) {
 }
 
 RowMatrix* load_vectors(int n_input_vecs=999994) {
-  // std::cout << "Using " << n_input_vecs << " input vectors." << std::endl;
+  std::cout << "Using " << n_input_vecs << " input vectors." << std::endl;
   std::ios::sync_with_stdio(false);
   attributes.reserve(n_input_vecs); //999994
   std::ifstream fin("wiki-news-300d-1M.vec");
@@ -84,6 +84,7 @@ extern "C" {
     index_ptr = new Lorann::Lorann<Lorann::SQ4Quantizer>(X->data(), X->rows(), X->cols(), n_clusters, global_dim, sliced_attributes, attribute_strings,
                                               rank, train_size, euclidean, false);
     index_ptr->build(true, -1, n_attr_partitions);
+    std::cout << "index_ptr: " << index_ptr << std::endl;
     return true;
   }
 }
@@ -97,6 +98,7 @@ int* filter(int q_idx, bool exact_search, int k,  int clusters_to_search, int po
     std::cout << "Index has not been initialised. Aborting..." << std::endl;
     return 0;
   }
+  std::cout << "index_ptr: " << index_ptr << std::endl;
   Lorann::Lorann<Lorann::SQ4Quantizer> index = *index_ptr;
   RowMatrix Q = (*Q_ptr).topRows(1000);
   // std::cout << "mark filter_attribute: " << filter_attribute << std::endl;
@@ -122,7 +124,7 @@ int* filter(int q_idx, bool exact_search, int k,  int clusters_to_search, int po
   // std::cout << std::endl << "Querying the index using approximate search..." << std::endl;
     // std::cout << "running approximate search with " << filter_approach << " strategy and k: " << k << std::endl;
   index.search((*Q_ptr).row(q_idx).data(), k, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_approach);
-  // std::cout << "exact search results:" << std::endl;
+  std::cout << "approx search ended:" << std::endl;
   std::cout << exact_indices.transpose() << std::endl;
   // std::cout << "approx search results:" << std::endl;
   std::cout << approx_indices.transpose() << std::endl;
@@ -153,8 +155,26 @@ int* filter(int q_idx, bool exact_search, int k,  int clusters_to_search, int po
 }
 }
 
+extern "C" {
+  int filter_wrapper(int* idxs, int n_idxs, bool exact_search, int k,  int clusters_to_search, int points_to_rerank, const char* filter_attribute, const char* filter_approach) {
+    std::cout << "Entered filter_wrapper" << std::endl;
+
+    std::vector<int*> results(n_idxs);
+    for (int i = 0; i < n_idxs; i++) {
+      std::cout << "idxs[" << i << "]: " << idxs[i] << std::endl;
+    }
+    for ( int i = 0; i < n_idxs; i++) {
+      std::cout << "loop " << i << std::endl;
+      results[i] = filter(idxs[i], exact_search, k, clusters_to_search, points_to_rerank, filter_attribute, filter_approach);
+    }
+    return 0;
+  }
+}
+
 int main() {
-  bool idx = build_index(10, 999994, 1024, 256, 32, 5, true);
-  int* ret_val = filter(253, true, 10, 64, 2000, "yellow", "indexing");
+  bool idx = build_index(10, 100000, 1024, 256, 32, 5, true);
+  for (int i = 4070; i < 4075; i++) {
+    filter(i, true, 10, 64, 2000, "yellow", "indexing");
+  }
   return 0;
 }

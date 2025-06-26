@@ -119,7 +119,7 @@ class Lorann : public LorannBase {
     // int current_cumulative_cluster_size = 0;
     bool use_attr_indexing = (filter_approach == "indexing" || filter_approach == "prefilter");
     for (int i = 0; i < clusters_to_search; ++i) {
-      // std::cout << "searching cluster " << i << std::endl;
+      // std::cout << "searching cluster " << i << "/" << clusters_to_search << std::endl;
       const int cluster = I[i];
       const int sz = _cluster_sizes[cluster];
       // std::cout << "sz: " << sz << std::endl;
@@ -137,7 +137,7 @@ class Lorann : public LorannBase {
           }
         }
       }
-
+      // std::cout << "post indexes" << std::endl;
       // std::cout << std::endl << "attribute_data_idxs[" << i << "]: " << attribute_data_idxs.size() << std::endl;
       // for (int i = 0; i < attribute_data_idxs.size(); i++) {
       //   std::cout << attribute_data_idxs[i] << " ";
@@ -155,7 +155,7 @@ class Lorann : public LorannBase {
       const ColMatrixUInt8 &B = _B[cluster];
       const Vector &A_correction = _A_corrections[cluster];
       const Vector &B_correction = _B_corrections[cluster];
-
+      // std::cout << "pre quantized A" << std::endl;
       /* compute s = q^T A */
       quant_data.quantized_matvec_product_A(A, quantized_query, A_correction, quantization_factor,
                                             principal_axis, compensation_data, tmp.data());
@@ -165,7 +165,10 @@ class Lorann : public LorannBase {
                                                         quantized_query_doubled.data());
       const float compensation_tmp =
           quantized_query_doubled.cast<float>().sum() * quant_data.compensation_factor;
-
+      // std::cout << "pre quantized total_pts: " << total_pts << std::endl;
+      // std::cout << "pre quantized current_cumulative_size: " << current_cumulative_size << std::endl;
+      // std::cout << "pre quantized attribute_data_idxs.size(): " << attribute_data_idxs.size() << std::endl;
+      std::cout << "cluster i: " << i << "/" << clusters_to_search << std::endl;
       /* compute r = s^T B */
       if (filter_approach == "prefilter" || filter_approach == "indexing") {
         quant_data.quantized_matvec_product_B_filter(B, quantized_query_doubled, &attribute_data_idxs, B_correction, tmpfact,
@@ -176,6 +179,7 @@ class Lorann : public LorannBase {
                                                     principal_axis_tmp, compensation_tmp,
                                                     &all_distances[current_cumulative_size]);
       }
+      // std::cout << "post quantized" << std::endl;
       if (_euclidean)
         add_inplace(_cluster_norms[cluster].data(), &all_distances[current_cumulative_size],
                     _cluster_norms[cluster].size());
@@ -188,8 +192,9 @@ class Lorann : public LorannBase {
         current_cumulative_size += sz;
       }
       
+      // std::cout << "post memcopy" << std::endl;
     }
-    // std::cout << "current_cumulative_size: " << current_cumulative_size << std::endl;
+    // std::cout << "current_cumulative_size 0: " << current_cumulative_size << std::endl;
     
     ColVector filtered_distances(current_cumulative_size);
     // std::cout << "filtered_distances.size()" << filtered_distances.size() << std::endl;
@@ -201,7 +206,7 @@ class Lorann : public LorannBase {
     }
     Eigen::VectorXi shuffled_out(k); // why is this needed?
     // std::cout << "k: " << k << std::endl;
-    // std::cout << "current_cumulative_size: " << current_cumulative_size << std::endl;
+    // std::cout << "current_cumulative_size 1: " << current_cumulative_size << std::endl;
     // std::cout << "points_to_rerank: " << points_to_rerank << std::endl;
     select_final(_euclidean ? data : scaled_query.data(), k, points_to_rerank, current_cumulative_size,
                  all_idxs.data(), filtered_distances.data(), shuffled_out.data(), dist_out);

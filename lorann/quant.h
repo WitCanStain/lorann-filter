@@ -424,7 +424,6 @@ struct SQ4Quantizer : SQQuantizer {
                                   const size_t rows, const size_t cols) const {
     for (size_t j = 0; j < cols; ++j) {
       int32_t sum = 0;
-
       for (int k = 0; k < 16; ++k) {
         sum += ((int32_t)(A[k + j * 16] >> 4)) * ((int32_t)x[k + 16]);
         sum += ((int32_t)(A[k + j * 16] & 0xF)) * ((int32_t)x[k]);
@@ -450,7 +449,7 @@ struct SQ4Quantizer : SQQuantizer {
 
 
   inline void matvec_product_B_16_filter(const uint8_t *A, const int8_t *x, float *result,
-                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
+                                  const size_t rows, std::vector<int>* idxs) const {
     for (size_t j = 0; j < (*idxs).size(); ++j) {
       size_t i = (*idxs)[j];
       int32_t sum = 0;
@@ -464,23 +463,31 @@ struct SQ4Quantizer : SQQuantizer {
     }
   }
 
-  inline void matvec_product_B_32_filter(const uint8_t *A, const int8_t *x, float *result,
-                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
+  inline void matvec_product_B_32_filter(const uint8_t *A, int Asize, const int8_t *x, float *result,
+                                  const size_t rows, std::vector<int>* idxs) const {
+    // std::cout << "(*idxs).size(): " << (*idxs).size() << std::endl;
+    // std::cout << "Asize: " << Asize << std::endl;
     for (size_t j = 0; j < (*idxs).size(); ++j) {
       size_t i = (*idxs)[j];
       int32_t sum = 0;
-
+      // std::cout << "j: " << j << "|" << std::endl;
+      // std::cout << "i: " << i << "|" << std::endl;
       for (int k = 0; k < 16; ++k) {
+        // std::cout << "k: " << k << std::endl;
+        std::cout << "Asize: " << Asize << std::endl;
+        std::cout << "k+i*16: " << k + i * 16 << std::endl;
+        std::cout << "A[k + i * 16]: " << A[k + i * 16] << std::endl;
         sum += ((int32_t)(A[k + i * 16] >> 4)) * ((int32_t)x[k + 16]);
+        // std::cout << "here" << std::endl;
         sum += ((int32_t)(A[k + i * 16] & 0xF)) * ((int32_t)x[k]);
       }
-
+      // std::cout << "j: " << j << " ";
       result[j] = sum;
     }
   }
 
   inline void matvec_product_B_64_filter(const uint8_t *A, const int8_t *x, float *result,
-                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
+                                  const size_t rows, std::vector<int>* idxs) const {
     for (size_t j = 0; j < (*idxs).size(); ++j) {
       size_t i = (*idxs)[j];
       int32_t sum = 0;
@@ -504,7 +511,8 @@ struct SQ4Quantizer : SQQuantizer {
                                          float *result) const {
     const float *scales = correction.data();
     const float *fix = correction.data() + qA.cols();
-
+    std::cout << "qA.size(): " << qA.size() << std::endl;
+    std::cout << "v.size(): " << v.size() << std::endl;
     const int rank = qA.rows() * 2;
     if (rank == 32)
       matvec_product_B_32(qA.data(), v.data(), result, rank, qA.cols());
@@ -524,12 +532,16 @@ struct SQ4Quantizer : SQQuantizer {
     const float *fix = correction.data() + qA.cols();
     // std::cout << " using sq4quantizer" << std::endl;
     const int rank = qA.rows() * 2;
+    std::cout << "f qA.size(): " << qA.size() << std::endl;
+    std::cout << "f qA.cols(): " << qA.cols() << std::endl;
+    std::cout << "f qA.rows(): " << qA.rows() << std::endl;
+    std::cout << "f v.size(): " << v.size() << std::endl;
     if (rank == 32)
-      matvec_product_B_32_filter(qA.data(), v.data(), result, rank, qA.cols(), idxs);
+      matvec_product_B_32_filter(qA.data(), qA.size(), v.data(), result, rank, idxs);
     else if (rank == 16)
-      matvec_product_B_16_filter(qA.data(), v.data(), result, rank, qA.cols(), idxs);
+      matvec_product_B_16_filter(qA.data(), v.data(), result, rank, idxs);
     else
-      matvec_product_B_64_filter(qA.data(), v.data(), result, rank, qA.cols(), idxs);
+      matvec_product_B_64_filter(qA.data(), v.data(), result, rank, idxs);
 
     scale_result(result, compensation, scales, fix, scale, factor, qA.cols());
   }

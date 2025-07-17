@@ -121,7 +121,7 @@ class LorannBase {
                      int num_threads) {}
 
   virtual void search(const float *data, const int k, const int clusters_to_search,
-                      const int points_to_rerank, int *idx_out, std::set<std::string>& filter_attributes, std::string filter_approach, float *dist_out = nullptr) const {}
+                      const int points_to_rerank, int *idx_out, std::set<std::string>& filter_attributes, std::string filter_approach, float *dist_out = nullptr, bool verbose=false) const {}
 
   virtual ~LorannBase() {}
 

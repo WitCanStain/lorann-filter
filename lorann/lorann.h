@@ -73,11 +73,10 @@ class Lorann : public LorannBase {
    * @param dist_out The (optional) distance output array of length k
    */
   void search(const float *data, const int k, const int clusters_to_search,
-              const int points_to_rerank, int *idx_out, std::set<std::string>& filter_attributes, std::string filter_approach, float *dist_out = nullptr) const override {
+              const int points_to_rerank, int *idx_out, std::set<std::string>& filter_attributes, std::string filter_approach, float *dist_out = nullptr, bool verbose=false) const override {
     ColVector scaled_query;
     ColVector transformed_query;
     Eigen::Map<const Eigen::VectorXf> data_vec(data, _dim);
-// std::cout << "data_vec: " << data_vec << std::endl;
     if (_euclidean) {
       scaled_query = -2. * data_vec;
     } else {
@@ -124,10 +123,25 @@ class Lorann : public LorannBase {
       const int sz = _cluster_sizes[cluster];
       // std::cout << "sz: " << sz << std::endl;
       std::vector<int> attribute_data_idxs;
+      std::vector<int> cluster_attribute_data_idxs;
       if (filter_approach == "indexing") {
         attribute_data_map this_cluster_attribute_data_map = _cluster_attribute_data_maps[cluster];
         attribute_data_idxs = this_cluster_attribute_data_map[filter_attributes];
 
+        std::unordered_map<int, int> index_map;
+        for (size_t i = 0; i < _cluster_map[cluster].size(); ++i) {
+          index_map[_cluster_map[cluster][i]] = i;
+        }
+
+        // Step 2: Lookup indices for elements in B
+        for (int b : attribute_data_idxs) {
+          if (index_map.count(b)) {
+            cluster_attribute_data_idxs.push_back(index_map[b]);
+          }
+        }
+        // for (const auto& idx : attribute_data_idxs) {
+        //   cluster_attribute_data_idxs.push_back(std::distance(attribute_data_idxs, std::find(attribute_data_idxs.begin(), attribute_data_idxs.end(), 3));)
+        // }
 
 
       } else if (filter_approach == "prefilter") {
@@ -168,12 +182,29 @@ class Lorann : public LorannBase {
       // std::cout << "pre quantized total_pts: " << total_pts << std::endl;
       // std::cout << "pre quantized current_cumulative_size: " << current_cumulative_size << std::endl;
       // std::cout << "pre quantized attribute_data_idxs.size(): " << attribute_data_idxs.size() << std::endl;
-      std::cout << "cluster i: " << i << "/" << clusters_to_search << std::endl;
+      if (verbose && (i == 0)) std::cout << "cluster i: " << i << "/" << clusters_to_search << std::endl;
+      if (verbose && (i == 0)) std::cout << "_cluster_map[cluster].size(): " << _cluster_map[cluster].size() << std::endl;
+      if (verbose && (i == 0)) {
+        std::cout << "_cluster_map[cluster][" << i << "]: " << std::endl;
+        for (int y = 0; y < _cluster_map[cluster].size(); y++) {
+          std::cout << "y: " << _cluster_map[cluster][y] << " ";
+        }
+        std::cout << std::endl << "attribute_data_idxs: " << std::endl;
+        for (int y = 0; y < attribute_data_idxs.size(); y++) {
+          std::cout << "y2: " << attribute_data_idxs[y] << " ";
+        }
+        std::cout << std::endl << "cluster_attribute_data_idxs.size(): " << cluster_attribute_data_idxs.size() << std::endl;
+        for (int y = 0; y < cluster_attribute_data_idxs.size(); y++) {
+          std::cout << "y3: " << cluster_attribute_data_idxs[y] << " ";
+          std::cout << "value: " << _cluster_map[cluster][cluster_attribute_data_idxs[y]] << " ";
+        }
+        std::cout << std::endl;
+      }
       /* compute r = s^T B */
       if (filter_approach == "prefilter" || filter_approach == "indexing") {
-        quant_data.quantized_matvec_product_B_filter(B, quantized_query_doubled, &attribute_data_idxs, B_correction, tmpfact,
+        quant_data.quantized_matvec_product_B_filter(B, quantized_query_doubled, &cluster_attribute_data_idxs, B_correction, tmpfact,
                                                     principal_axis_tmp, compensation_tmp,
-                                                    &all_distances[current_cumulative_size]);
+                                                    &all_distances[current_cumulative_size], verbose && (i == 0));
       } else {
         quant_data.quantized_matvec_product_B(B, quantized_query_doubled, B_correction, tmpfact,
                                                     principal_axis_tmp, compensation_tmp,

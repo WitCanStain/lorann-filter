@@ -11,7 +11,9 @@ extern "C" {
 
 EXPORT_SYMBOL int build_index(int n_attr_partitions, int n_clusters, int global_dim, int rank, int train_size, bool euclidean);
 
-EXPORT_SYMBOL int filter(int q_idx, bool exact_search, int k,  int clusters_to_search, int points_to_rerank, std::string filter_attribute, std::string filter_approach);
+EXPORT_SYMBOL float filter(int q_idx, bool exact_search, int k,  int clusters_to_search, int points_to_rerank, std::string filter_attribute, std::string filter_approach);
+
+EXPORT_SYMBOL int filter_proc(int n_attr_partitions, int n_clusters, int global_dim, int rank, int train_size, bool euclidean, int q_idx, bool exact_search, int k,  int clusters_to_search, int points_to_rerank, std::string filter_attribute, std::string filter_approach);
 
 EXPORT_SYMBOL int filter_wrapper(int* idxs, int n_idxs, bool exact_search, int k,  int clusters_to_search, int points_to_rerank, std::string filter_attribute, std::string filter_approach);
 

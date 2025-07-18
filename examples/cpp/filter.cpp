@@ -84,7 +84,7 @@ extern "C" {
     index_ptr = new Lorann::Lorann<Lorann::SQ4Quantizer>(X->data(), X->rows(), X->cols(), n_clusters, global_dim, sliced_attributes, attribute_strings,
                                               rank, train_size, euclidean, false);
     index_ptr->build(true, -1, n_attr_partitions);
-    std::cout << "index_ptr: " << index_ptr << std::endl;
+    // std::cout << "index_ptr: " << index_ptr << std::endl;
     return true;
   }
 }
@@ -116,9 +116,7 @@ float filter(int q_idx, bool exact_search, int k,  int clusters_to_search, int p
   // std::cout << "running exact search with " << filter_approach << " strategy and k: " << k << std::endl;
   index.exact_search((*Q_ptr).row(q_idx).data(), k, exact_indices.data(), filter_attributes, filter_approach);
   
-  for (const auto& idx : exact_indices) {
-    // std::cout << attributes[idx] << " ";
-  }
+  
   // std::cout << std::endl << "Querying the index using approximate search..." << std::endl;
     // std::cout << "running approximate search with " << filter_approach << " strategy and k: " << k << std::endl;
   bool verbose = false;
@@ -133,11 +131,8 @@ float filter(int q_idx, bool exact_search, int k,  int clusters_to_search, int p
   //   std::cout << attributes[idx] << " ";
   // }
   std::vector<int> res_union = findUnion(exact_indices, approx_indices);
-  // for (int i = 0; i < res_union.size(); i++) {
-  //   std::cout << res_union[i] << " ";
-  // }
   float recall = res_union.size()/float(k);
-  std::cout << "Recall: " << recall << std::endl;
+  // std::cout << "Recall: " << recall << std::endl;
   
   // if (exact_search) {
     
@@ -145,35 +140,72 @@ float filter(int q_idx, bool exact_search, int k,  int clusters_to_search, int p
     
   // }
   // std::cout << std::endl << "Saving the index to disk..." << std::endl;
-  std::ofstream output_file("index.bin", std::ios::binary);
-  cereal::BinaryOutputArchive output_archive(output_file);
-  output_archive(index);
+  // std::ofstream output_file("index.bin", std::ios::binary);
+  // cereal::BinaryOutputArchive output_archive(output_file);
+  // output_archive(index);
   return recall;
 }
 }
 
 extern "C" {
   float filter_wrapper(int* idxs, int n_idxs, bool exact_search, int k,  int clusters_to_search, int points_to_rerank, const char* filter_attribute, const char* filter_approach) {
-    std::cout << "Entered filter_wrapper" << std::endl;
 
     std::vector<float> results(n_idxs);
-    std::chrono::milliseconds total_duration = (std::chrono::milliseconds)0;
+    std::chrono::microseconds total_duration = (std::chrono::microseconds)0;
     for ( int i = 0; i < n_idxs; i++) {
       auto start = std::chrono::high_resolution_clock::now();
       results[i] = filter(idxs[i], exact_search, k, clusters_to_search, points_to_rerank, filter_attribute, filter_approach);
       auto stop = std::chrono::high_resolution_clock::now();
-      auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
       total_duration = total_duration + duration;
-      std::cout << "loop duration: " << duration.count() << " ms"<< std::endl;
+      // std::cout << "loop duration: " << duration.count() << " ms"<< std::endl;
     }
-    std::chrono::milliseconds avg_duration = total_duration / n_idxs;
-    std::cout << "Average query duration: " << avg_duration.count() << " ms" << std::endl;
+    std::chrono::microseconds avg_duration = total_duration / n_idxs;
+    std::cout << "Average query duration: " << avg_duration.count() << " microseconds" << std::endl;
     float sum = 0;
     for (size_t i = 0; i < n_idxs; ++i) {
       sum += results[i];
     }
     float avg_recall = sum / n_idxs;
-    std::cout << "average recall: " << avg_recall << std::endl;
+    std::cout << "average recall: " << avg_recall << " microseconds" << std::endl;
+    return avg_recall;
+  }
+}
+
+extern "C" {
+  float fast_filter_wrapper_profiled(int* idxs, int n_idxs, int k, int clusters_to_search, int points_to_rerank, const char* filter_attribute, const char* filter_approach, const char* exact_search_approach) {
+    Lorann::Lorann<Lorann::SQ4Quantizer> index = *index_ptr;
+    std::set<std::string> filter_attributes = {filter_attribute};
+    std::vector<float> recall_vec(n_idxs);
+    std::chrono::microseconds total_exact_duration = (std::chrono::microseconds) 0;
+    std::chrono::microseconds total_approx_duration = (std::chrono::microseconds) 0;
+    for ( int i = 0; i < n_idxs; i++) {
+      Eigen::VectorXi exact_indices(k);
+      auto start_exact = std::chrono::high_resolution_clock::now();
+      index.exact_search((*Q_ptr).row(idxs[i]).data(), k, exact_indices.data(), filter_attributes, filter_approach);
+      auto stop_exact = std::chrono::high_resolution_clock::now();
+      auto duration_exact = std::chrono::duration_cast<std::chrono::microseconds>(stop_exact - start_exact);
+      total_exact_duration = total_exact_duration + duration_exact;
+      Eigen::VectorXi approx_indices(k);
+      auto start_approx = std::chrono::high_resolution_clock::now();
+      index.search((*Q_ptr).row(idxs[i]).data(), k, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_approach, nullptr, false);
+      auto stop_approx = std::chrono::high_resolution_clock::now();
+      auto duration_approx = std::chrono::duration_cast<std::chrono::microseconds>(stop_approx - start_approx);
+      total_approx_duration = total_approx_duration + duration_approx;
+      std::vector<int> res_union = findUnion(exact_indices, approx_indices);
+      recall_vec[i] = res_union.size()/float(k);
+    }
+    std::chrono::microseconds avg_exact_duration = total_exact_duration / n_idxs;
+    std::chrono::microseconds avg_approx_duration = total_approx_duration / n_idxs;
+    std::cout << "Average exact query duration: " << avg_exact_duration.count() << " microseconds" << std::endl;
+    std::cout << "Average approx query duration: " << avg_approx_duration.count() << " microseconds" << std::endl;
+    float sum = 0;
+    for (size_t i = 0; i < n_idxs; ++i) {
+      // std::cout << "recall: " << recall_vec[i] << std::endl;
+      sum += recall_vec[i];
+    }
+    float avg_recall = sum / n_idxs;
+    // std::cout << "average recall: " << avg_recall << std::endl;
     return avg_recall;
   }
 }

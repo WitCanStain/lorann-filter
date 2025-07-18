@@ -127,23 +127,17 @@ class Lorann : public LorannBase {
       if (filter_approach == "indexing") {
         attribute_data_map this_cluster_attribute_data_map = _cluster_attribute_data_maps[cluster];
         attribute_data_idxs = this_cluster_attribute_data_map[filter_attributes];
-
         std::unordered_map<int, int> index_map;
         for (size_t i = 0; i < _cluster_map[cluster].size(); ++i) {
           index_map[_cluster_map[cluster][i]] = i;
         }
 
-        // Step 2: Lookup indices for elements in B
+        // this can be optimised by creating this vector during indexing
         for (int b : attribute_data_idxs) {
           if (index_map.count(b)) {
             cluster_attribute_data_idxs.push_back(index_map[b]);
           }
         }
-        // for (const auto& idx : attribute_data_idxs) {
-        //   cluster_attribute_data_idxs.push_back(std::distance(attribute_data_idxs, std::find(attribute_data_idxs.begin(), attribute_data_idxs.end(), 3));)
-        // }
-
-
       } else if (filter_approach == "prefilter") {
         for (int i = 0; i < sz; i++) {
           if (filter_attributes.find(_attributes[_cluster_map[cluster][i]]) != filter_attributes.end()) {
@@ -169,7 +163,6 @@ class Lorann : public LorannBase {
       const ColMatrixUInt8 &B = _B[cluster];
       const Vector &A_correction = _A_corrections[cluster];
       const Vector &B_correction = _B_corrections[cluster];
-      // std::cout << "pre quantized A" << std::endl;
       /* compute s = q^T A */
       quant_data.quantized_matvec_product_A(A, quantized_query, A_correction, quantization_factor,
                                             principal_axis, compensation_data, tmp.data());
@@ -179,27 +172,6 @@ class Lorann : public LorannBase {
                                                         quantized_query_doubled.data());
       const float compensation_tmp =
           quantized_query_doubled.cast<float>().sum() * quant_data.compensation_factor;
-      // std::cout << "pre quantized total_pts: " << total_pts << std::endl;
-      // std::cout << "pre quantized current_cumulative_size: " << current_cumulative_size << std::endl;
-      // std::cout << "pre quantized attribute_data_idxs.size(): " << attribute_data_idxs.size() << std::endl;
-      if (verbose && (i == 0)) std::cout << "cluster i: " << i << "/" << clusters_to_search << std::endl;
-      if (verbose && (i == 0)) std::cout << "_cluster_map[cluster].size(): " << _cluster_map[cluster].size() << std::endl;
-      if (verbose && (i == 0)) {
-        std::cout << "_cluster_map[cluster][" << i << "]: " << std::endl;
-        for (int y = 0; y < _cluster_map[cluster].size(); y++) {
-          std::cout << "y: " << _cluster_map[cluster][y] << " ";
-        }
-        std::cout << std::endl << "attribute_data_idxs: " << std::endl;
-        for (int y = 0; y < attribute_data_idxs.size(); y++) {
-          std::cout << "y2: " << attribute_data_idxs[y] << " ";
-        }
-        std::cout << std::endl << "cluster_attribute_data_idxs.size(): " << cluster_attribute_data_idxs.size() << std::endl;
-        for (int y = 0; y < cluster_attribute_data_idxs.size(); y++) {
-          std::cout << "y3: " << cluster_attribute_data_idxs[y] << " ";
-          std::cout << "value: " << _cluster_map[cluster][cluster_attribute_data_idxs[y]] << " ";
-        }
-        std::cout << std::endl;
-      }
       /* compute r = s^T B */
       if (filter_approach == "prefilter" || filter_approach == "indexing") {
         quant_data.quantized_matvec_product_B_filter(B, quantized_query_doubled, &cluster_attribute_data_idxs, B_correction, tmpfact,
@@ -210,7 +182,6 @@ class Lorann : public LorannBase {
                                                     principal_axis_tmp, compensation_tmp,
                                                     &all_distances[current_cumulative_size]);
       }
-      // std::cout << "post quantized" << std::endl;
       if (_euclidean)
         add_inplace(_cluster_norms[cluster].data(), &all_distances[current_cumulative_size],
                     _cluster_norms[cluster].size());
@@ -223,15 +194,8 @@ class Lorann : public LorannBase {
         current_cumulative_size += sz;
       }
       
-      // std::cout << "post memcopy" << std::endl;
     }
-    // std::cout << "current_cumulative_size 0: " << current_cumulative_size << std::endl;
-    
     ColVector filtered_distances(current_cumulative_size);
-    // std::cout << "filtered_distances.size()" << filtered_distances.size() << std::endl;
-    // std::cout << "all_distances.size()" << all_distances.size() << std::endl;
-    // std::cout << "all_idxs.size()" << all_idxs.size() << std::endl;
-    // std::cout << "we here: " << current_cumulative_size << std::endl;
     for (int i = 0; i < current_cumulative_size; i++) { // this is needed because all_distances when using indexing will have more reserved memory than there are filtered datapoints so we need to filter it to include only the number of datapoints we want.
       filtered_distances[i] = all_distances[i];
     }
@@ -301,16 +265,6 @@ class Lorann : public LorannBase {
       }
   } else {
     for (int i = 0; i < k; i++) {
-      // if(!(std::find(all_idxs.begin(), all_idxs.end(), shuffled_out[i]) != all_idxs.end())) {
-      //   std::cout << "index " << shuffled_out[i] << " is not in all_idxs" << std::endl;
-      // } else {
-      //   std::cout << "+++index " << shuffled_out[i] << " IS in all_idxs" << std::endl;
-      // }
-      // std::cout << "shuffled_out[" << i << "]: " << shuffled_out[i] << std::endl;
-      // if (shuffled_out[i] > all_idxs.size()) {
-      //   std::cout << "Cannot print index " << shuffled_out[i] << "of " << all_idxs.size() << std::endl;
-      // }
-      // std::cout << "all_idxs[shuffled_out[" << i << "]]: " << all_idxs[shuffled_out[i]] << std::endl;
       idx_out[i] = shuffled_out[i];
     }
   }

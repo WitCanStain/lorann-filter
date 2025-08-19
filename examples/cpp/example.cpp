@@ -13,7 +13,7 @@ const int n_attributes = 10;
 std::vector<std::string> attribute_strings = {"red", "green", "blue", "yellow", "orange", "purple", "black", "white", "pink", "brown"};
 std::random_device rd; // obtain a random number from hardware
 std::mt19937 gen(rd()); // seed the generator
-std::uniform_int_distribution<> distr(0, n_attributes-1); // define the range
+std::uniform_int_distribution<> attribute_selector_distr(0, n_attributes-1); // define the range
 
 RowMatrix load_vectors() {
   std::ios::sync_with_stdio(false);
@@ -38,7 +38,7 @@ RowMatrix load_vectors() {
     iss >> token;
     int j = 0;
     float value;
-    int rand_int = distr(gen);
+    int rand_int = attribute_selector_distr(gen);
     std::string random_attribute = attribute_strings[rand_int];
     // std::cout << "random attribute: " << random_attribute << std::endl;
     attributes.push_back(random_attribute);

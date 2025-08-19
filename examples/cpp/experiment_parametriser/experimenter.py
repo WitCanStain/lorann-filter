@@ -38,8 +38,8 @@ if __name__ == "__main__":
     points_to_rerank = 2000
     k = 10
     filter_attribute = "yellow"
-    filter_approach = "indexing"
-    exact_search_approach = "indexing"
+    filter_approach = "postfilter"
+    exact_search_approach = "postfilter"
     filter_attribute_b_string = filter_attribute.encode('utf-8')
     filter_approach_b_string = filter_approach.encode('utf-8')
     exact_search_approach_b_string = exact_search_approach.encode('utf-8')

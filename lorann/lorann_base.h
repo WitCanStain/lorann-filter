@@ -14,11 +14,11 @@
 
 namespace Lorann {
 
-typedef std::unordered_map<std::set<std::string>, std::vector<int>, set_hash> attribute_data_map;
+typedef std::unordered_map<std::unordered_set<int>, std::vector<int>, set_hash> attribute_data_map;
 
 class LorannBase {
  public:
-  LorannBase(float *data, int m, int d, int n_clusters, int global_dim, std::vector<std::string>& attributes, std::vector<std::string>& attribute_strings, int rank, int train_size,
+  LorannBase(float *data, int m, int d, int n_clusters, int global_dim, std::vector<std::unordered_set<int>>& attributes, std::vector<int>& attribute_idxs, int rank, int train_size,
              bool euclidean, bool balanced)
       : _data(data),
         _n_samples(m),
@@ -26,7 +26,7 @@ class LorannBase {
         _n_clusters(n_clusters),
         _global_dim(global_dim <= 0 ? d : std::min(global_dim, d)),
         _attributes(attributes),
-        _attribute_strings(attribute_strings),
+        _attribute_idxs(attribute_idxs),
         _max_rank(std::min(rank, d)),
         _train_size(train_size),
         _euclidean(euclidean),
@@ -121,7 +121,7 @@ class LorannBase {
                      int num_threads) {}
 
   virtual void search(const float *data, const int k, const int clusters_to_search,
-                      const int points_to_rerank, int *idx_out, std::set<std::string>& filter_attributes, std::string filter_approach, float *dist_out = nullptr, bool verbose=false) const {}
+                      const int points_to_rerank, int *idx_out, std::unordered_set<int>& filter_attributes, std::string filter_approach, float *dist_out = nullptr, bool verbose=false) const {}
 
   virtual ~LorannBase() {}
 
@@ -133,13 +133,38 @@ class LorannBase {
    * @param out The index output array of length k
    * @param dist_out The (optional) distance output array of length k
    */
-  void exact_search(const float *q, int k, int *out, const std::set<std::string>& filter_attributes, std::string filter_approach, float *dist_out = nullptr) const {
+  void exact_search(const float *q, int k, int *out, const std::unordered_set<int>& filter_attributes, std::string filter_approach, float *dist_out = nullptr) const {
     float *data_ptr = _data;
-    // float *data_ptr;
     int n_datapoints;
     std::vector<int> attribute_data_idxs;
     if (filter_approach == "indexing") {
-      attribute_data_idxs = _attribute_data_map[filter_attributes];
+      std::unordered_set<int> smallest_idx;
+      int smallest_idx_size = _n_samples;
+      for (const auto& attr: filter_attributes) {
+        std::unordered_set<int> attr_set = _attribute_index_map[attr];
+        int attr_idx_size = _attribute_data_map[attr_set].size();
+        if (attr_idx_size <= smallest_idx_size) {
+          smallest_idx = attr_set;
+          smallest_idx_size = _attribute_data_map[smallest_idx].size();
+        }
+      }
+      std::vector<int> attribute_idx = _attribute_data_map[smallest_idx];
+      attribute_data_idxs.reserve(attribute_idx.size());
+      
+      for (int i = 0; i < attribute_idx.size(); ++i) { // for each data point in the smallest index which the datapoints belong to, check if the data point has the other filter attributes as well, if yes then add to filtered list.
+        bool filters_match = true;
+        int true_idx = attribute_idx[i];
+        for (const auto& attr: filter_attributes) {
+          if (!_attributes[true_idx].count(attr)) {
+            filters_match = false;
+            break;
+          }
+        }
+        if (filters_match) {
+          attribute_data_idxs.push_back(true_idx);
+        }
+      }
+      // attribute_data_idxs = _attribute_data_map[filter_attributes];
       n_datapoints = attribute_data_idxs.size();
       // std::cout << "n_datapoints: " << n_datapoints << std::endl;
       // for (int i = 0; i < 10; i++) {
@@ -149,9 +174,13 @@ class LorannBase {
       // std::cout << "n_datapoints: " << n_datapoints << std::endl;
     } else if (filter_approach == "prefilter") {
       for (int i = 0; i < _n_samples; i++) {
-        if (filter_attributes.find(_attributes[i]) != filter_attributes.end()) {
-          attribute_data_idxs.push_back(i);
+        bool all_found = true;
+        for (const auto& attribute: _attributes[i]) {
+          if (!filter_attributes.count(attribute)) {
+            all_found = false;
+          }
         }
+        if (all_found) attribute_data_idxs.push_back(i);
       }
       n_datapoints = attribute_data_idxs.size();
     } else if (filter_approach == "postfilter") {
@@ -199,7 +228,14 @@ class LorannBase {
       std::vector<int>* matched_idxs = new std::vector<int>();
       // std::cout << "matched_idxs addr 0: " << matched_idxs << std::endl;
       for (int i = 0; i < k; i++) {
-        if (filter_attributes.find(_attributes[shuffled_out[i]]) != filter_attributes.end()) {
+        bool filters_match = true;
+        for (const auto& attr: filter_attributes) {
+          if (!_attributes[shuffled_out[i]].count(attr)) {
+            filters_match = false;
+            break;
+          }
+        }
+        if (filters_match) {
           matched_idxs->push_back(shuffled_out[i]);
         }
       }
@@ -220,9 +256,19 @@ class LorannBase {
         std::vector<int>* new_matched_idxs = new std::vector<int>();
         ptr_vec.push_back(new_matched_idxs);
         for (int i = 0; i < new_k; i++) {
-          if (filter_attributes.find(_attributes[new_out[i]]) != filter_attributes.end()) {
+          bool filters_match = true;
+          for (const auto& attr: filter_attributes) {
+            if (!_attributes[new_out[i]].count(attr)) {
+              filters_match = false;
+              break;
+            }
+          }
+          if (filters_match) {
             new_matched_idxs->push_back(new_out[i]);
           }
+          // if (filter_attributes.find(_attributes[new_out[i]]) != filter_attributes.end()) {
+          //   new_matched_idxs->push_back(new_out[i]);
+          // }
         }
         matched_k = new_matched_idxs->size();
         matched_idxs = new_matched_idxs;
@@ -333,7 +379,7 @@ class LorannBase {
 
   std::vector<std::vector<int>> clustering(KMeans &global_clustering, const float *data,
                                            const int n, const float *train_data, const int train_n,
-                                           const bool approximate, int num_threads, std::vector<std::set<std::string>> &attribute_partition_sets) {
+                                           const bool approximate, int num_threads, std::vector<std::unordered_set<int>> &attribute_partition_sets) {
     const int to_sample = SAMPLED_POINTS_PER_CLUSTER * _n_clusters;
     if (!_balanced && approximate && to_sample < 0.5f * n) {
       /* sample points for k-means */
@@ -350,11 +396,14 @@ class LorannBase {
       attribute_data_map this_cluster_attribute_data_map;
       std::vector<int> cluster = _cluster_map[i];
       for (const auto& attr_set : attribute_partition_sets) {
-        std::vector<int> attribute_data_idx_vec; // vector of indexes of datapoints that have at least one of the attributes in attribute_subvec_set
+        std::vector<int> attribute_data_idx_vec(cluster.size()); // vector of indexes of datapoints that have at least one of the attributes in attribute_subvec_set
         for (int i = 0; i<cluster.size(); i++) {
           int idx = cluster[i];
-          if (attr_set.count(_attributes[idx]) != 0) { // for each datapoint, check if it has this attribute
-            attribute_data_idx_vec.push_back(idx);                 // if yes, add it to the map for the corresponding attribute set
+          for (const auto& attr: attr_set) { // for each attribute in the attribute set
+            if (_attributes[idx].count(attr)) { // check if that datapoint has any of the current filter attributes
+              attribute_data_idx_vec.push_back(idx); // if yes, add it to the map for the corresponding attribute set
+              break; // break so we do not add the same datapoint multiple times for different attributes
+            }
           }
         } 
         // /**/
@@ -450,9 +499,10 @@ class LorannBase {
   bool _euclidean;
   bool _balanced;
   
-  std::vector<std::string> _attributes;
-  std::vector<std::string> _attribute_strings;
+  std::vector<std::unordered_set<int>> _attributes;
+  std::vector<int> _attribute_idxs;
   mutable attribute_data_map _attribute_data_map;
+  mutable std::unordered_map<int, std::unordered_set<int>> _attribute_index_map;
   mutable std::vector<attribute_data_map> _cluster_attribute_data_maps;
 
   /* vector of points assigned to a cluster, for each cluster */

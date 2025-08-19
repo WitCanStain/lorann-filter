@@ -513,7 +513,7 @@ std::vector<std::vector<T>> split_vector(const std::vector<T>& input, size_t n) 
 
 struct set_hash {
   template <typename T>
-  size_t operator()(const std::set<T>& s) const {
+  size_t operator()(const std::unordered_set<T>& s) const {
       size_t hash_value = 0;
       for (const auto& elem : s) {
           hash_value ^= std::hash<T>{}(elem) + 0x9e3779b9 + (hash_value << 6) + (hash_value >> 2);

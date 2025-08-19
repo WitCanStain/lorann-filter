@@ -9,24 +9,24 @@
 #include <chrono>
 
 typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> RowMatrix;
-std::vector<std::string> attributes;
+std::vector<std::unordered_set<int>> attributes;
 const int n_attributes = 10;
 // const int n_input_vecs = 50000; //999994
 std::vector<std::string> attribute_strings = {"red", "green", "blue", "yellow", "orange", "purple", "black", "white", "pink", "brown"};
+std::vector<int> attribute_idxs(attribute_strings.size());
 std::random_device rd; // obtain a random number from hardware
 std::mt19937 gen(42); // seed the generator
-std::uniform_int_distribution<> distr(0, n_attributes-1); // define the range
+std::uniform_int_distribution<> attribute_selector_distr(0, n_attributes-1); // define the range
+std::uniform_int_distribution<> attribute_count_distr(1, n_attributes/2); // define the range
+
 
 std::vector<int> findUnion(Eigen::VectorXi& a, Eigen::VectorXi& b) {
     std::sort(a.begin(), a.end());
     std::sort(b.begin(), b.end());
-  	
     std::vector<int> result;
-    
     std::set_intersection(a.begin(), a.end(),
                           b.begin(), b.end(),
                           std::back_inserter(result));
-  	
     return result;
 }
 
@@ -54,10 +54,16 @@ RowMatrix* load_vectors(int n_input_vecs=999994) {
     iss >> token;
     int j = 0;
     float value;
-    int rand_int = distr(gen);
-    std::string random_attribute = attribute_strings[rand_int];
+    int n_attributes_for_point = attribute_count_distr(gen);
+    std::unordered_set<int> point_attributes(n_attributes_for_point);
+    for (int k = 0; k < n_attributes_for_point; ++k) {
+      int selected_attr_idx = attribute_selector_distr(gen);
+      // std::string random_attribute = attribute_strings[selected_attr_idx];
+      point_attributes.insert(selected_attr_idx);
+    }
+    
     // std::cout << "random attribute: " << random_attribute << std::endl;
-    attributes.push_back(random_attribute);
+    attributes.push_back(point_attributes);
     while (iss >> value) {
       (*ret_ptr)(i, j) = value;
       ++j;
@@ -78,10 +84,13 @@ extern "C" {
     Q_ptr = X;
     // RowMatrix Q = X.topRows(1000);
     // Q_ptr =  new RowMatrix(X->topRows(100000));
+    for (int i = 0; i <= attribute_idxs.size(); ++i) {
+      attribute_idxs.push_back(i);
+    }
 
     std::cout << "Building the index..." << std::endl;
-    std::vector<std::string> sliced_attributes(attributes.begin(), attributes.begin()+X->rows());
-    index_ptr = new Lorann::Lorann<Lorann::SQ4Quantizer>(X->data(), X->rows(), X->cols(), n_clusters, global_dim, sliced_attributes, attribute_strings,
+    std::vector<std::unordered_set<int>> sliced_attributes(attributes.begin(), attributes.begin()+X->rows());
+    index_ptr = new Lorann::Lorann<Lorann::SQ4Quantizer>(X->data(), X->rows(), X->cols(), n_clusters, global_dim, sliced_attributes, attribute_idxs,
                                               rank, train_size, euclidean, false);
     index_ptr->build(true, -1, n_attr_partitions);
     // std::cout << "index_ptr: " << index_ptr << std::endl;
@@ -101,7 +110,9 @@ float filter(int q_idx, bool exact_search, int k,  int clusters_to_search, int p
   Lorann::Lorann<Lorann::SQ4Quantizer> index = *index_ptr;
   RowMatrix Q = (*Q_ptr).topRows(1000);
   // std::cout << "mark filter_attribute: " << filter_attribute << std::endl;
-  std::set<std::string> filter_attributes = {filter_attribute};
+  auto it = std::find(attribute_strings.begin(), attribute_strings.end(), filter_attribute);
+  int filter_idx = it - attribute_strings.begin();
+  std::unordered_set<int> filter_attributes = {filter_idx};
   // std::cout << "q_idx: " << q_idx << std::endl;
   Eigen::VectorXi exact_indices(k);
   Eigen::VectorXi approx_indices(k);
@@ -175,7 +186,9 @@ extern "C" {
 extern "C" {
   float fast_filter_wrapper_profiled(int* idxs, int n_idxs, int k, int clusters_to_search, int points_to_rerank, const char* filter_attribute, const char* filter_approach, const char* exact_search_approach) {
     Lorann::Lorann<Lorann::SQ4Quantizer> index = *index_ptr;
-    std::set<std::string> filter_attributes = {filter_attribute};
+    auto it = std::find(attribute_strings.begin(), attribute_strings.end(), filter_attribute);
+    int filter_idx = it - attribute_strings.begin();
+    std::unordered_set<int> filter_attributes = {filter_idx};
     std::vector<float> recall_vec(n_idxs);
     std::chrono::microseconds total_exact_duration = (std::chrono::microseconds) 0;
     std::chrono::microseconds total_approx_duration = (std::chrono::microseconds) 0;

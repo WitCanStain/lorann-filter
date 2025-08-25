@@ -117,22 +117,29 @@ class Lorann : public LorannBase {
     int current_cumulative_size = 0;
     // int current_cumulative_cluster_size = 0;
     bool use_attr_indexing = (filter_approach == "indexing" || filter_approach == "prefilter");
+    int total_smallest_idx_sizes = 0; // temporary, remove
+    bool matching_results_found = false;
+    double found_ratio_avg;
+    int cumulative_cluster_size = 0;
+    int cumulative_found_points = 0;
     for (int i = 0; i < clusters_to_search; ++i) {
       // std::cout << "searching cluster " << i << "/" << clusters_to_search << std::endl;
       const int cluster = I[i];
       const int sz = _cluster_sizes[cluster];
+      cumulative_cluster_size += sz;
       // std::cout << "sz: " << sz << std::endl;
       std::vector<int> attribute_data_idxs;
       std::vector<int> cluster_attribute_data_idxs;
       if (filter_approach == "indexing") {
         attribute_data_map this_cluster_attribute_data_map = _cluster_attribute_data_maps[cluster];
-
+        // std::cout << "this_cluster_attribute_data_map.size() for cluster " << cluster << ": " << this_cluster_attribute_data_map.size() << std::endl;
         //
         std::unordered_set<int> smallest_idx;
         int smallest_idx_size = _n_samples;
-        for (const auto& attr: filter_attributes) {
+        for (const auto& attr: filter_attributes) { // find the smallest index which has the required data points
           std::unordered_set<int> attr_set = _attribute_index_map[attr];
           int attr_idx_size = this_cluster_attribute_data_map[attr_set].size();
+          // std::cout << "attr_idx_size for attribute " << attr << ": " << attr_idx_size << std::endl;
           if (attr_idx_size <= smallest_idx_size) {
             smallest_idx = attr_set;
             smallest_idx_size = this_cluster_attribute_data_map[smallest_idx].size();
@@ -140,7 +147,8 @@ class Lorann : public LorannBase {
         }
         std::vector<int> attribute_idx = this_cluster_attribute_data_map[smallest_idx];
         attribute_data_idxs.reserve(attribute_idx.size());
-        
+        total_smallest_idx_sizes += attribute_idx.size();
+        // std::cout << "smallest attribute_idx size for cluster " << cluster << ": " << attribute_idx.size() << std::endl;
         for (int i = 0; i < attribute_idx.size(); ++i) { // for each data point in the smallest index which the datapoints belong to, check if the data point has the other filter attributes as well, if yes then add to filtered list.
           bool filters_match = true;
           int true_idx = attribute_idx[i];
@@ -152,18 +160,11 @@ class Lorann : public LorannBase {
           }
           if (filters_match) {
             attribute_data_idxs.push_back(true_idx);
+            matching_results_found = true;
           }
         }
-        //
-
         // attribute_data_idxs = this_cluster_attribute_data_map[filter_attributes];
-
-        std::unordered_map<int, int> index_map;
-        for (size_t i = 0; i < _cluster_map[cluster].size(); ++i) {
-          index_map[_cluster_map[cluster][i]] = i;
-        }
-
-        // this can be optimised by creating this vector during indexing
+        std::unordered_map<int, int> index_map = _cluster_index_maps[cluster];
         for (int b : attribute_data_idxs) { 
           if (index_map.count(b)) {
             cluster_attribute_data_idxs.push_back(index_map[b]); // cluster_attribute_data_idxs is used during the quantized_matvec_product_B_filter method to determine which columns of the B matrix should be kept or discarded
@@ -177,27 +178,15 @@ class Lorann : public LorannBase {
               all_found = false;
             }
           }
-          if (all_found) attribute_data_idxs.push_back(_cluster_map[cluster][i]);
-
-          // if (filter_attributes.count(_attributes[_cluster_map[cluster][i]])) {
-          //   attribute_data_idxs.push_back(_cluster_map[cluster][i]);
-          // }
+          if (all_found) {
+            attribute_data_idxs.push_back(_cluster_map[cluster][i]);
+            matching_results_found = true;
+          }
         }
       }
-      // std::cout << "post indexes" << std::endl;
-      // std::cout << std::endl << "attribute_data_idxs[" << i << "]: " << attribute_data_idxs.size() << std::endl;
-      // for (int i = 0; i < attribute_data_idxs.size(); i++) {
-      //   std::cout << attribute_data_idxs[i] << " ";
-      // }
-      // std::cout << std::endl << "_cluster_map[" << i << "]: " << attribute_data_idxs.size() << std::endl;
-      // for (int i = 0; i < _cluster_map[cluster].size(); i++) {
-      //   std::cout << _cluster_map[cluster][i] << " ";
-      // }
-      
       int n_filtered_cluster_datapoints = attribute_data_idxs.size();
-      // std::cout << "n_filtered_cluster_datapoints: " << n_filtered_cluster_datapoints << std::endl;
+      cumulative_found_points += n_filtered_cluster_datapoints;
       if (sz == 0 || ( filter_approach != "postfilter" && n_filtered_cluster_datapoints == 0)) continue;
-
       const ColMatrixUInt8 &A = _A[cluster];
       const ColMatrixUInt8 &B = _B[cluster];
       const Vector &A_correction = _A_corrections[cluster];
@@ -205,6 +194,7 @@ class Lorann : public LorannBase {
       /* compute s = q^T A */
       quant_data.quantized_matvec_product_A(A, quantized_query, A_correction, quantization_factor,
                                             principal_axis, compensation_data, tmp.data());
+      
       const float principal_axis_tmp = tmp[0];
 
       const float tmpfact = quant_query.quantize_vector(tmp.data() + 1, _max_rank - 1,
@@ -224,7 +214,6 @@ class Lorann : public LorannBase {
       if (_euclidean)
         add_inplace(_cluster_norms[cluster].data(), &all_distances[current_cumulative_size],
                     _cluster_norms[cluster].size());
-      
       if (use_attr_indexing) { // when we use indexing, we process fewer results than the full size of the cluster due to filtering them beforehand.
         std::memcpy(&all_idxs[current_cumulative_size], attribute_data_idxs.data(), attribute_data_idxs.size() * sizeof(int));
         current_cumulative_size += n_filtered_cluster_datapoints;
@@ -232,9 +221,16 @@ class Lorann : public LorannBase {
         std::memcpy(&all_idxs[current_cumulative_size], _cluster_map[cluster].data(), sz * sizeof(int));
         current_cumulative_size += sz;
       }
-      
+    }
+    if (filter_approach != "postfilter" && !matching_results_found) {
+      throw std::runtime_error("No matches found for filter attributes!");
+    }
+    if (verbose) {
+      std::cout << "!! Average ratio of satisfactory points to cluster size: " << ((double) cumulative_found_points) / cumulative_cluster_size << std::endl;
+      std::cout << "cumulative_found_points: " << cumulative_found_points << std::endl;
     }
     ColVector filtered_distances(current_cumulative_size);
+    // std::cout << "total_smallest_idx_sizes: " << total_smallest_idx_sizes << std::endl;
     for (int i = 0; i < current_cumulative_size; i++) { // this is needed because all_distances when using indexing will have more reserved memory than there are filtered datapoints so we need to filter it to include only the number of datapoints we want.
       filtered_distances[i] = all_distances[i];
     }
@@ -244,7 +240,6 @@ class Lorann : public LorannBase {
     // std::cout << "points_to_rerank: " << points_to_rerank << std::endl;
     select_final(_euclidean ? data : scaled_query.data(), k, points_to_rerank, current_cumulative_size,
                  all_idxs.data(), filtered_distances.data(), shuffled_out.data(), dist_out);
-    
     if (filter_approach == "postfilter") {
       std::vector<int>* matched_idxs = new std::vector<int>();
       // std::cout << "_attributes.size(): " << _attributes.size() << std::endl;
@@ -353,6 +348,11 @@ class Lorann : public LorannBase {
     std::vector<std::unordered_set<int>> attribute_partition_sets;
     if (n_attribute_partitions >= 0) {
       std::vector<std::vector<int>> attr_subvecs = split_vector(_attribute_idxs, n_attribute_partitions); // partition the attributes into groups of attributes
+      std::cout << "attr_subvecs.size(): " << attr_subvecs.size() << std::endl;
+      for (const auto& subvec : attr_subvecs) {
+        std::cout << subvec.size() << " ";
+      }
+      std::cout << std::endl;
       for (const auto& attr_subvec : attr_subvecs) {
         std::unordered_set<int> attribute_subvec_set(attr_subvec.begin(), attr_subvec.end()); // turn the attribute partition vector into a set to eliminate duplicates and enable using it as a key for map
         std::vector<int> attribute_data_idx_vec; // vector of indexes of datapoints that have at least one of the attributes in attribute_subvec_set

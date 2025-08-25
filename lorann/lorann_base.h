@@ -150,7 +150,6 @@ class LorannBase {
       }
       std::vector<int> attribute_idx = _attribute_data_map[smallest_idx];
       attribute_data_idxs.reserve(attribute_idx.size());
-      
       for (int i = 0; i < attribute_idx.size(); ++i) { // for each data point in the smallest index which the datapoints belong to, check if the data point has the other filter attributes as well, if yes then add to filtered list.
         bool filters_match = true;
         int true_idx = attribute_idx[i];
@@ -187,6 +186,9 @@ class LorannBase {
       n_datapoints = _n_samples;
     } else {
       throw std::invalid_argument("filter_approach must be one of 'indexing', 'prefilter', or 'postfilter'");
+    }
+    if (filter_approach != "postfilter" && attribute_data_idxs.size() == 0) {
+        throw std::runtime_error("No matches found for filter attributes!");
     }
     Vector dist(n_datapoints); // used to be above conditional
     // std::cout << "dist size: " << dist.size() << std::endl;
@@ -392,20 +394,33 @@ class LorannBase {
     }
 
     /* Create filter attribute index maps for clusters for approximate search */
+    // std::cout << "_cluster_map.size(): " << _cluster_map.size() << std::endl;
     for (int i = 0; i < _cluster_map.size(); i++) {
       attribute_data_map this_cluster_attribute_data_map;
+      
       std::vector<int> cluster = _cluster_map[i];
+      // std::cout << "Clustering cluster " << i << " with size " << cluster.size() << std::endl;
       for (const auto& attr_set : attribute_partition_sets) {
-        std::vector<int> attribute_data_idx_vec(cluster.size()); // vector of indexes of datapoints that have at least one of the attributes in attribute_subvec_set
+        std::vector<int> attribute_data_idx_vec; // vector of indexes of datapoints that have at least one of the attributes in attribute_subvec_set
+        attribute_data_idx_vec.reserve(cluster.size());
+        int non_applicable_points = 0;
         for (int i = 0; i<cluster.size(); i++) {
           int idx = cluster[i];
           for (const auto& attr: attr_set) { // for each attribute in the attribute set
             if (_attributes[idx].count(attr)) { // check if that datapoint has any of the current filter attributes
               attribute_data_idx_vec.push_back(idx); // if yes, add it to the map for the corresponding attribute set
               break; // break so we do not add the same datapoint multiple times for different attributes
+            } else {
+              non_applicable_points++;
             }
           }
-        } 
+        }
+
+        std::unordered_map<int, int> index_map;
+        for (size_t j = 0; j < _cluster_map[i].size(); ++j) {
+          index_map[_cluster_map[i][j]] = j;
+        }
+        _cluster_index_maps.push_back(index_map);
         // /**/
         // if (i==0) {
         //   std::cout << "attribute_data_idx_vec.size(): " << attribute_data_idx_vec.size() << std::endl;;
@@ -417,10 +432,23 @@ class LorannBase {
         //   }
         // }
         // /**/
+        std::string attribute_string = "";
+        for (const auto& attr: attr_set) {
+          attribute_string += std::to_string(attr) + " ";
+        }
+        // std::cout << "attribute_data_idx_vec.size() for attributes " << attribute_string << ": " << attribute_data_idx_vec.size() << std::endl;
+        // std::cout << "non_applicable_points: " << non_applicable_points << std::endl;
+        // std::cout << "attribute_data_idx_vec.size() + non_applicable_points: " << attribute_data_idx_vec.size() + non_applicable_points << std::endl;
         this_cluster_attribute_data_map.insert({attr_set, attribute_data_idx_vec});
       }
       _cluster_attribute_data_maps.push_back(this_cluster_attribute_data_map); // add cluster attribute data map to vector of all cluster attribute data maps
     }
+
+    int n_total_index_size = 0;
+    for (const auto& attribute_data_map: _cluster_attribute_data_maps) {
+      n_total_index_size += attribute_data_map.size();
+    }
+    std::cout << "Total index size: " << n_total_index_size << std::endl;
 
     /* printouts to help see if indexes were built correctly */
     // std::cout << "cluster map size: " << _cluster_map.size() << std::endl;
@@ -501,6 +529,7 @@ class LorannBase {
   
   std::vector<std::unordered_set<int>> _attributes;
   std::vector<int> _attribute_idxs;
+  std::vector<std::unordered_map<int, int>> _cluster_index_maps;
   mutable attribute_data_map _attribute_data_map;
   mutable std::unordered_map<int, std::unordered_set<int>> _attribute_index_map;
   mutable std::vector<attribute_data_map> _cluster_attribute_data_maps;

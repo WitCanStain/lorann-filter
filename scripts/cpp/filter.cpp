@@ -10,7 +10,7 @@
 
 typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> RowMatrix;
 std::vector<std::unordered_set<int>> attributes;
-const int n_attributes = 30;
+
 // const int n_input_vecs = 50000; //999994
 //std::vector<std::string> attribute_strings = {"one", "green", "blue", "yellow", "orange", "purple", "black", "white", "pink", "brown"};
 std::vector<std::string> attribute_strings = {
@@ -20,12 +20,13 @@ std::vector<std::string> attribute_strings = {
         "sixteen", "seventeen", "eighteen", "nineteen", "twenty",
         "twenty-one", "twenty-two", "twenty-three", "twenty-four", "twenty-five",
         "twenty-six", "twenty-seven", "twenty-eight", "twenty-nine", "thirty"
-    };
-std::vector<int> attribute_idxs(attribute_strings.size());
+};
+const int n_attributes = attribute_strings.size(); // 30
+std::vector<int> attribute_idxs;
 std::random_device rd; // obtain a random number from hardware
 std::mt19937 gen(42); // seed the generator
 std::uniform_int_distribution<> attribute_selector_distr(0, n_attributes-1); // define the range
-std::uniform_int_distribution<> attribute_count_distr(1, n_attributes/2); // define the range
+std::uniform_int_distribution<> attribute_count_distr(1, 5); // define the range
 
 
 std::vector<int> findUnion(Eigen::VectorXi& a, Eigen::VectorXi& b) {
@@ -56,6 +57,7 @@ RowMatrix* load_vectors(int n_input_vecs=999994) {
   RowMatrix* ret_ptr = new RowMatrix(n_input_vecs, 300);
 
   int i = 0;
+  int n_this_attribute_points = 0;
   while (std::getline(fin, line) && i < n_input_vecs) {
     std::istringstream iss(line);
     std::string token;
@@ -64,8 +66,10 @@ RowMatrix* load_vectors(int n_input_vecs=999994) {
     float value;
     int n_attributes_for_point = attribute_count_distr(gen);
     std::unordered_set<int> point_attributes(n_attributes_for_point);
+    
     for (int k = 0; k < n_attributes_for_point; ++k) {
       int selected_attr_idx = attribute_selector_distr(gen);
+      if (selected_attr_idx == 0 && !point_attributes.count(0)) n_this_attribute_points++;
       point_attributes.insert(selected_attr_idx);
     }
     
@@ -76,6 +80,12 @@ RowMatrix* load_vectors(int n_input_vecs=999994) {
     }
     ++i;
   }
+  std::cout << "n_this_attribute_points for idx 0: " << n_this_attribute_points << std::endl;
+  int n_this_attribute_points_set = 0;
+  for (const auto& point_set: attributes) {
+    if (point_set.count(0)) n_this_attribute_points_set++;
+  }
+  std::cout << "n_this_attribute_points_set for idx 0: " << n_this_attribute_points_set << std::endl;
   std::cout << "Loading data complete" << std::endl;
   return ret_ptr;//().topRows(100000);
 }
@@ -90,10 +100,10 @@ extern "C" {
     Q_ptr = X;
     // RowMatrix Q = X.topRows(1000);
     // Q_ptr =  new RowMatrix(X->topRows(100000));
+    std::cout << "filter.cpp attribute_strings.size(): " << attribute_strings.size() << std::endl;
     for (int i = 0; i < attribute_strings.size(); ++i) {
       attribute_idxs.push_back(i);
     }
-
     std::cout << "Building the index..." << std::endl;
     std::vector<std::unordered_set<int>> sliced_attributes(attributes.begin(), attributes.begin()+X->rows());
     index_ptr = new Lorann::Lorann<Lorann::SQ4Quantizer>(X->data(), X->rows(), X->cols(), n_clusters, global_dim, sliced_attributes, attribute_idxs,
@@ -169,7 +179,6 @@ extern "C" {
     std::unordered_set<int> filter_attributes;
     std::cout << "n_filter_attributes: " << n_filter_attributes << std::endl;
     for (int i = 0; i<n_filter_attributes; ++i) {
-      std::cout << string_filter_attributes[i] << std::endl;
       auto it = std::find(attribute_strings.begin(), attribute_strings.end(), string_filter_attributes[i]);
       int filter_idx = it - attribute_strings.begin();
       filter_attributes.insert(filter_idx);
@@ -183,14 +192,24 @@ extern "C" {
     for ( int i = 0; i < n_idxs; i++) {
       Eigen::VectorXi exact_indices(k);
       auto start_exact = std::chrono::high_resolution_clock::now();
-      index.exact_search((*Q_ptr).row(idxs[i]).data(), k, exact_indices.data(), filter_attributes, filter_approach);
+      try {
+        index.exact_search((*Q_ptr).row(idxs[i]).data(), k, exact_indices.data(), filter_attributes, filter_approach);
+      } catch (const std::runtime_error &e) {
+        std::cout << e.what() << std::endl;
+        break;
+      }
       auto stop_exact = std::chrono::high_resolution_clock::now();
       auto duration_exact = std::chrono::duration_cast<std::chrono::microseconds>(stop_exact - start_exact);
       total_exact_duration = total_exact_duration + duration_exact;
       all_exact_indices.push_back(exact_indices);
       Eigen::VectorXi approx_indices(k);
       auto start_approx = std::chrono::high_resolution_clock::now();
-      index.search((*Q_ptr).row(idxs[i]).data(), k, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_approach, nullptr, false);
+      try {
+        index.search((*Q_ptr).row(idxs[i]).data(), k, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_approach, nullptr, false);
+      } catch (const std::runtime_error &e) {
+        std::cout << e.what() << std::endl;
+        break;
+      }
       auto stop_approx = std::chrono::high_resolution_clock::now();
       auto duration_approx = std::chrono::duration_cast<std::chrono::microseconds>(stop_approx - start_approx);
       total_approx_duration = total_approx_duration + duration_approx;

@@ -8,7 +8,8 @@ import random
 if __name__ == "__main__":
     # Load the shared library into ctypes
     random.seed(41)
-    libname = pathlib.Path().absolute() / "../libfilter.so"
+    script_dir = pathlib.Path(__file__).resolve().parent
+    libname = script_dir.parent / "cpp" / "libfilter.so"
     c_lib = ctypes.CDLL(libname)
     c_lib.build_index.restype = ctypes.c_bool
     c_lib.build_index.argtypes = ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool
@@ -38,12 +39,12 @@ if __name__ == "__main__":
     clusters_to_search = 64
     points_to_rerank = 2000
     k = 10
-    filter_attributes = ["fourteen", "one", "three"]
+    filter_attributes = ["one"]
     filter_attributes_b = [s.encode("utf-8") for s in filter_attributes]
     FilterArrayType = ctypes.c_char_p * len(filter_attributes_b)
     filter_attributes_c = FilterArrayType(*filter_attributes_b)
-    filter_approach = "indexing"
-    exact_search_approach = "prefilter"
+    filter_approach = "prefilter"
+    exact_search_approach = "indexing"
     # filter_attribute_b_string = filter_attributes.encode('utf-8')
     filter_approach_b_string = filter_approach.encode('utf-8')
     exact_search_approach_b_string = exact_search_approach.encode('utf-8')

@@ -166,9 +166,9 @@ doxygen
 *.hdf5
 
 /.vscode
-/examples/cpp/index.bin
-/examples/cpp/wiki-news-300d-1M.vec
-/examples/cpp/example
-/examples/cpp/experiment_parametriser/wiki-news-300d-1M.vec
-/examples/cpp/experiment_parametriser/index.bin
-/examples/cpp/experiment_parametriser/venv/*
+/scripts/cpp/index.bin
+/scripts/cpp/wiki-news-300d-1M.vec
+/scripts/cpp/example
+/scripts/experiment_parametriser/wiki-news-300d-1M.vec
+/scripts/experiment_parametriser/index.bin
+/scripts/experiment_parametriser/venv/*

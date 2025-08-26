@@ -394,7 +394,7 @@ class LorannBase {
     }
 
     /* Create filter attribute index maps for clusters for approximate search */
-    // std::cout << "_cluster_map.size(): " << _cluster_map.size() << std::endl;
+    std::cout << "_cluster_map.size(): " << _cluster_map.size() << std::endl;
     for (int i = 0; i < _cluster_map.size(); i++) {
       attribute_data_map this_cluster_attribute_data_map;
       
@@ -446,7 +446,9 @@ class LorannBase {
 
     int n_total_index_size = 0;
     for (const auto& attribute_data_map: _cluster_attribute_data_maps) {
-      n_total_index_size += attribute_data_map.size();
+      for (const auto& idx_vec: attribute_data_map) {
+        n_total_index_size += idx_vec.second.size();
+      }
     }
     std::cout << "Total index size: " << n_total_index_size << std::endl;
 

@@ -193,7 +193,7 @@ extern "C" {
       Eigen::VectorXi exact_indices(k);
       auto start_exact = std::chrono::high_resolution_clock::now();
       try {
-        index.exact_search((*Q_ptr).row(idxs[i]).data(), k, exact_indices.data(), filter_attributes, filter_approach);
+        index.exact_search((*Q_ptr).row(idxs[i]).data(), k, exact_indices.data(), filter_attributes, exact_search_approach);
       } catch (const std::runtime_error &e) {
         std::cout << e.what() << std::endl;
         break;
@@ -216,6 +216,10 @@ extern "C" {
       all_approx_indices.push_back(approx_indices);
       std::vector<int> res_union = findUnion(exact_indices, approx_indices);
       recall_vec[i] = res_union.size()/float(k);
+      std::cout << "exact indices:" << std::endl;
+      std::cout << exact_indices.transpose() << std::endl;
+      std::cout << "approx indices:" << std::endl;
+      std::cout << approx_indices.transpose() << std::endl;
     }
     int exact_indices_true_matches = 0;
     for (const auto& exact_indices: all_exact_indices) {

@@ -27,7 +27,7 @@ if __name__ == "__main__":
     c_lib.fast_filter_wrapper_profiled.argtypes = ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.POINTER(ctypes.c_char_p), ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p
 
     # index parameters
-    n_attr_partitions = 15
+    n_attr_partitions = 20
     n_input_vecs = 999994 #999994
     n_clusters = 1024 # 1024 for full set
     global_dim = 256
@@ -35,29 +35,20 @@ if __name__ == "__main__":
     train_size = 5
     euclidean = True
     
-    query_indices = [random.randint(0, n_input_vecs) for i in range(300)]
+    query_indices = [399529, 241926, 958223, 402175, 893348, 9781, 819157, 880067, 460738, 758298, 334374, 270022, 650928, 612145, 125639, 453611, 881900, 226359, 76249, 498268, 131075, 702495, 19438, 129779, 722313, 944585, 279510, 333237, 650012, 190935, 930905, 316057, 418856, 111895, 98062, 695562, 517225, 241595, 22717, 81649, 763585]
+    #[random.randint(0, n_input_vecs) for i in range(100)]
 
     search_param_sets = [
-        # {
-        #     "clusters_to_search": 32,
-        #     "points_to_rerank": 2000,
-        #     "k": 10,
-        #     "filter_attributes": ["one"],
-        #     "filter_approach": "prefilter",
-        #     "exact_search_approach": "prefilter",
-        #     "n_repeat_runs": 1,
-        #     "query_indices": query_indices,
-        # },
-        # {
-        #     "clusters_to_search": 32,
-        #     "points_to_rerank": 2000,
-        #     "k": 10,
-        #     "filter_attributes": ["one"],
-        #     "filter_approach": "postfilter",
-        #     "exact_search_approach": "prefilter",
-        #     "n_repeat_runs": 1,
-        #     "query_indices": query_indices,
-        # },
+        {
+            "clusters_to_search": 64,
+            "points_to_rerank": 2000,
+            "k": 10,
+            "filter_attributes": ["one"],
+            "filter_approach": "indexing",
+            "exact_search_approach": "indexing",
+            "n_repeat_runs": 1,
+            "query_indices": query_indices,
+        },
         {
             "clusters_to_search": 64,
             "points_to_rerank": 2000,
@@ -65,6 +56,16 @@ if __name__ == "__main__":
             "filter_attributes": ["one"],
             "filter_approach": "indexing",
             "exact_search_approach": "prefilter",
+            "n_repeat_runs": 1,
+            "query_indices": query_indices,
+        },
+        {
+            "clusters_to_search": 64,
+            "points_to_rerank": 2000,
+            "k": 10,
+            "filter_attributes": ["one"],
+            "filter_approach": "indexing",
+            "exact_search_approach": "postfilter",
             "n_repeat_runs": 1,
             "query_indices": query_indices,
         }

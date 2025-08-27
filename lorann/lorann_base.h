@@ -174,8 +174,8 @@ class LorannBase {
     } else if (filter_approach == "prefilter") {
       for (int i = 0; i < _n_samples; i++) {
         bool all_found = true;
-        for (const auto& attribute: _attributes[i]) {
-          if (!filter_attributes.count(attribute)) {
+        for (const auto& attribute: filter_attributes) {
+          if (!_attributes[i].count(attribute)) {
             all_found = false;
           }
         }

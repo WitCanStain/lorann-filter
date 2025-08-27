@@ -195,7 +195,7 @@ class Lorann : public LorannBase {
         }
         auto stop_prefilter = std::chrono::high_resolution_clock::now();
         auto duration_prefilter = std::chrono::duration_cast<std::chrono::microseconds>(stop_prefilter - start_prefilter);
-        std::cout << "duration_prefilter: " << duration_prefilter.count() << " microseconds" << std::endl;
+        // std::cout << "duration_prefilter: " << duration_prefilter.count() << " microseconds" << std::endl;
       }
       int n_filtered_cluster_datapoints = attribute_data_idxs.size();
       cumulative_found_points += n_filtered_cluster_datapoints;
@@ -237,7 +237,7 @@ class Lorann : public LorannBase {
     }
     auto stop_clusters = std::chrono::high_resolution_clock::now();
     auto duration_clusters = std::chrono::duration_cast<std::chrono::microseconds>(stop_clusters - start_clusters);
-    std::cout << "duration all clusters: " << duration_clusters.count() << " microseconds" << std::endl;
+    // std::cout << "duration all clusters: " << duration_clusters.count() << " microseconds" << std::endl;
     if (filter_approach != "postfilter" && !matching_results_found) {
       throw std::runtime_error("No matches found for filter attributes!");
     }
@@ -371,6 +371,7 @@ class Lorann : public LorannBase {
       std::cout << std::endl;
       for (const auto& attr_subvec : attr_subvecs) {
         std::unordered_set<int> attribute_subvec_set(attr_subvec.begin(), attr_subvec.end()); // turn the attribute partition vector into a set to eliminate duplicates and enable using it as a key for map
+        attribute_partition_sets.push_back(attribute_subvec_set);
         std::vector<int> attribute_data_idx_vec; // vector of indexes of datapoints that have at least one of the attributes in attribute_subvec_set
         for (int i = 0; i<_n_samples; i++) { // for each datapoint
           for (const auto& attr: attribute_subvec_set) { // for each attribute in the attribute set
@@ -385,7 +386,6 @@ class Lorann : public LorannBase {
         }
         
         _attribute_data_map.insert({attribute_subvec_set, attribute_data_idx_vec});
-        attribute_partition_sets.push_back(attribute_subvec_set);
       }
     }
 

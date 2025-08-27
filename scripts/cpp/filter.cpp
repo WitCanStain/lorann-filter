@@ -189,6 +189,7 @@ extern "C" {
     std::cout << "Beginning querying..." << std::endl;
     std::vector<Eigen::VectorXi> all_exact_indices(n_idxs);
     std::vector<Eigen::VectorXi> all_approx_indices(n_idxs);
+    std::vector<int> bad_Recall_idxs;
     for ( int i = 0; i < n_idxs; i++) {
       Eigen::VectorXi exact_indices(k);
       auto start_exact = std::chrono::high_resolution_clock::now();
@@ -215,7 +216,10 @@ extern "C" {
       total_approx_duration = total_approx_duration + duration_approx;
       all_approx_indices.push_back(approx_indices);
       std::vector<int> res_union = findUnion(exact_indices, approx_indices);
-      recall_vec[i] = res_union.size()/float(k);
+      float recall = res_union.size()/float(k);
+      if (recall < 0.1) bad_Recall_idxs.push_back(idxs[i]); //std::cout << "ALERT Recall: " << recall << " for query index " << idxs[i] << std::endl;
+      recall_vec[i] = recall;
+      std::cout << "idx: " << idxs[i] << std::endl;
       std::cout << "exact indices:" << std::endl;
       std::cout << exact_indices.transpose() << std::endl;
       std::cout << "approx indices:" << std::endl;
@@ -264,6 +268,11 @@ extern "C" {
     }
     float avg_recall = sum / n_idxs;
     // std::cout << "average recall: " << avg_recall << std::endl;
+    // std::cout << "[";
+    // for (const auto& idx : bad_Recall_idxs) {
+    //   std::cout << idx << ", ";
+    // }
+    // std::cout << "]";
     return avg_recall;
   }
 }

@@ -172,6 +172,7 @@ class LorannBase {
       // }
       // std::cout << "n_datapoints: " << n_datapoints << std::endl;
     } else if (filter_approach == "prefilter") {
+      auto start_filter = std::chrono::high_resolution_clock::now();
       for (int i = 0; i < _n_samples; i++) {
         bool all_found = true;
         for (const auto& attribute: filter_attributes) {
@@ -182,6 +183,9 @@ class LorannBase {
         if (all_found) attribute_data_idxs.push_back(i);
       }
       n_datapoints = attribute_data_idxs.size();
+      auto stop_filter = std::chrono::high_resolution_clock::now();
+      auto duration_filter = std::chrono::duration_cast<std::chrono::microseconds>(stop_filter - start_filter);
+        std::cout << "duration_filter loop: " << duration_filter.count() << " microseconds" << std::endl;
     } else if (filter_approach == "postfilter") {
       n_datapoints = _n_samples;
     } else {

@@ -219,11 +219,11 @@ extern "C" {
       float recall = res_union.size()/float(k);
       if (recall < 0.1) bad_Recall_idxs.push_back(idxs[i]); //std::cout << "ALERT Recall: " << recall << " for query index " << idxs[i] << std::endl;
       recall_vec[i] = recall;
-      std::cout << "idx: " << idxs[i] << std::endl;
-      std::cout << "exact indices:" << std::endl;
-      std::cout << exact_indices.transpose() << std::endl;
-      std::cout << "approx indices:" << std::endl;
-      std::cout << approx_indices.transpose() << std::endl;
+      // std::cout << "idx: " << idxs[i] << std::endl;
+      // std::cout << "exact indices:" << std::endl;
+      // std::cout << exact_indices.transpose() << std::endl;
+      // std::cout << "approx indices:" << std::endl;
+      // std::cout << approx_indices.transpose() << std::endl;
     }
     int exact_indices_true_matches = 0;
     for (const auto& exact_indices: all_exact_indices) {

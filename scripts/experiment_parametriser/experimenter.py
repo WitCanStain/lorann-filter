@@ -44,8 +44,8 @@ if __name__ == "__main__":
             "points_to_rerank": 2000,
             "k": 10,
             "filter_attributes": ["one"],
-            "filter_approach": "indexing",
-            "exact_search_approach": "indexing",
+            "filter_approach": "prefilter",
+            "exact_search_approach": "prefilter",
             "n_repeat_runs": 1,
             "query_indices": query_indices,
         },
@@ -59,16 +59,16 @@ if __name__ == "__main__":
             "n_repeat_runs": 1,
             "query_indices": query_indices,
         },
-        {
-            "clusters_to_search": 64,
-            "points_to_rerank": 2000,
-            "k": 10,
-            "filter_attributes": ["one"],
-            "filter_approach": "indexing",
-            "exact_search_approach": "postfilter",
-            "n_repeat_runs": 1,
-            "query_indices": query_indices,
-        }
+        # {
+        #     "clusters_to_search": 64,
+        #     "points_to_rerank": 2000,
+        #     "k": 10,
+        #     "filter_attributes": ["one"],
+        #     "filter_approach": "indexing",
+        #     "exact_search_approach": "postfilter",
+        #     "n_repeat_runs": 1,
+        #     "query_indices": query_indices,
+        # }
     ]
     
     

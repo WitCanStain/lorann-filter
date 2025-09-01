@@ -141,17 +141,26 @@ class Lorann : public LorannBase {
         const std::unordered_map<int, int>& index_map = _cluster_index_maps[cluster];
         attribute_data_map& this_cluster_attribute_data_map = _cluster_attribute_data_maps[cluster];
         attribute_set smallest_idx;
+        smallest_idx.resize(_attribute_idxs.size());
         int smallest_idx_size = _n_samples;
         
-        for (const auto& attr: filter_attributes) { // find the smallest index which has the required data points
+        for (std::size_t attr = filter_attributes.find_first(); attr != attribute_set::npos; attr = filter_attributes.find_next(attr)) {
           attribute_set& attr_set = _attribute_index_map[attr];
           int attr_idx_size = this_cluster_attribute_data_map[attr_set].size();
-          // std::cout << "attr_idx_size for attribute " << attr << ": " << attr_idx_size << std::endl;
           if (attr_idx_size <= smallest_idx_size) {
             smallest_idx = attr_set;
             smallest_idx_size = attr_idx_size;
           }
         }
+        // for (const auto& attr: filter_attributes) { // find the smallest index which has the required data points
+        //   attribute_set& attr_set = _attribute_index_map[attr];
+        //   int attr_idx_size = this_cluster_attribute_data_map[attr_set].size();
+        //   // std::cout << "attr_idx_size for attribute " << attr << ": " << attr_idx_size << std::endl;
+        //   if (attr_idx_size <= smallest_idx_size) {
+        //     smallest_idx = attr_set;
+        //     smallest_idx_size = attr_idx_size;
+        //   }
+        // }
         std::vector<int>& attribute_idx = this_cluster_attribute_data_map[smallest_idx];
         attribute_data_idxs.reserve(attribute_idx.size());
         cluster_attribute_data_idxs.reserve(attribute_idx.size());
@@ -159,14 +168,14 @@ class Lorann : public LorannBase {
         auto stop_preloop = std::chrono::high_resolution_clock::now();
         auto start_indexing = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < attribute_idx.size(); ++i) { // for each data point in the smallest index which the datapoints belong to, check if the data point has the other filter attributes as well, if yes then add to filtered list.
-          bool filters_match = true;
+          bool filters_match = (_attributes[attribute_idx[i]] & filter_attributes) == filter_attributes;
           // int true_idx = attribute_idx[i];
-          for (const auto& attr: filter_attributes) {
-            if (!_attributes[attribute_idx[i]].count(attr)) {
-              filters_match = false;
-              break;
-            }
-          }
+          // for (const auto& attr: filter_attributes) {
+          //   if (!_attributes[attribute_idx[i]].count(attr)) {
+          //     filters_match = false;
+          //     break;
+          //   }
+          // }
           if (filters_match) {
             attribute_data_idxs.push_back(attribute_idx[i]);
             if (index_map.count(attribute_idx[i])) {
@@ -185,13 +194,13 @@ class Lorann : public LorannBase {
       } else if (filter_approach == "prefilter") {
         auto start_prefilter = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < sz; i++) {
-          bool all_found = true;
-          for (const auto& attribute: filter_attributes) {
-            if (!_attributes[_cluster_map[cluster][i]].count(attribute)) {
-              all_found = false;
-            }
-          }
-          if (all_found) {
+          bool filters_match = (_attributes[_cluster_map[cluster][i]] & filter_attributes) == filter_attributes;
+          // for (const auto& attribute: filter_attributes) {
+          //   if (!_attributes[_cluster_map[cluster][i]].count(attribute)) {
+          //     all_found = false;
+          //   }
+          // }
+          if (filters_match) {
             attribute_data_idxs.push_back(_cluster_map[cluster][i]);
             matching_results_found = true;
           }
@@ -274,13 +283,13 @@ class Lorann : public LorannBase {
       }
       for (int i = 0; i < k; i++) {
         // std::cout << "loop " << i << " ";
-        bool filters_match = true;
-        for (const auto& attr: filter_attributes) {
-          if (!_attributes[shuffled_out[i]].count(attr)) {
-            filters_match = false;
-            break;
-          }
-        }
+        bool filters_match = (_attributes[shuffled_out[i]] & filter_attributes) == filter_attributes;
+        // for (const auto& attr: filter_attributes) {
+        //   if (!_attributes[shuffled_out[i]].count(attr)) {
+        //     filters_match = false;
+        //     break;
+        //   }
+        // }
         if (filters_match) {
           matched_idxs->push_back(shuffled_out[i]);
         }
@@ -304,13 +313,13 @@ class Lorann : public LorannBase {
         std::vector<int>* new_matched_idxs = new std::vector<int>();
         ptr_vec.push_back(new_matched_idxs);
         for (int i = 0; i < new_k; i++) {
-          bool filters_match = true;
-          for (const auto& attr: filter_attributes) {
-            if (!_attributes[new_out[i]].count(attr)) {
-              filters_match = false;
-              break;
-            }
-          }
+          bool filters_match = (_attributes[new_out[i]] & filter_attributes) == filter_attributes;
+          // for (const auto& attr: filter_attributes) {
+          //   if (!_attributes[new_out[i]].count(attr)) {
+          //     filters_match = false;
+          //     break;
+          //   }
+          // }
           if (filters_match) {
             new_matched_idxs->push_back(new_out[i]);
           }
@@ -382,20 +391,35 @@ class Lorann : public LorannBase {
       }
       std::cout << std::endl;
       for (const auto& attr_subvec : attr_subvecs) {
-        attribute_set attribute_subvec_set(attr_subvec.begin(), attr_subvec.end()); // turn the attribute partition vector into a set to eliminate duplicates and enable using it as a key for map
+        attribute_set attribute_subvec_set;
+        attribute_subvec_set.resize(_attribute_idxs.size());
+        for (int idx: attr_subvec) {
+          attribute_subvec_set.set(idx);
+        }
+        // attribute_set attribute_subvec_set(attr_subvec.begin(), attr_subvec.end()); // turn the attribute partition vector into a set to eliminate duplicates and enable using it as a key for map
         attribute_partition_sets.push_back(attribute_subvec_set);
         std::vector<int> attribute_data_idx_vec; // vector of indexes of datapoints that have at least one of the attributes in attribute_subvec_set
         for (int i = 0; i<_n_samples; i++) { // for each datapoint
-          for (const auto& attr: attribute_subvec_set) { // for each attribute in the attribute set
-            if (_attributes[i].count(attr)) { // check if that datapoint has any of the current filter attributes
-              attribute_data_idx_vec.push_back(i); // if yes, add it to the map for the corresponding attribute set
-              break; // break so we do not add the same datapoint multiple times for different attributes
-            }
+          attribute_set attribute_match = (_attributes[i] & attribute_subvec_set);
+          if (attribute_match.count() > 0) {
+            attribute_data_idx_vec.push_back(i);
           }
+          // for (const auto& attr: attribute_subvec_set) { // for each attribute in the attribute set
+          //   if (_attributes[i].count(attr)) { // check if that datapoint has any of the current filter attributes
+          //     attribute_data_idx_vec.push_back(i); // if yes, add it to the map for the corresponding attribute set
+          //     break; // break so we do not add the same datapoint multiple times for different attributes
+          //   }
+          // }
         }
-        for (const auto& attr: attribute_subvec_set) {
-          _attribute_index_map.insert({attr, attribute_subvec_set});
+        for (std::size_t i = attribute_subvec_set.find_first(); i != attribute_set::npos; i = attribute_subvec_set.find_next(i)) {
+          _attribute_index_map.insert({i, attribute_subvec_set});
         }
+        // for (int i = 0; i < attribute_subvec_set.size(); ++i) {
+        //   if (attribute_subvec_set[i]) _attribute_index_map.insert({i, attribute_subvec_set});
+        // }
+        // for (const auto& attr: attribute_subvec_set) {
+        //   _attribute_index_map.insert({attr, attribute_subvec_set});
+        // }
         
         _attribute_data_map.insert({attribute_subvec_set, attribute_data_idx_vec});
       }

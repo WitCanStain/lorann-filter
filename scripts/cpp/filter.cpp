@@ -57,7 +57,7 @@ RowMatrix* load_vectors(int n_input_vecs=999994) {
   RowMatrix* ret_ptr = new RowMatrix(n_input_vecs, 300);
 
   int i = 0;
-  int n_this_attribute_points = 0;
+  // int n_this_attribute_points = 0;
   while (std::getline(fin, line) && i < n_input_vecs) {
     std::istringstream iss(line);
     std::string token;
@@ -66,11 +66,12 @@ RowMatrix* load_vectors(int n_input_vecs=999994) {
     float value;
     int n_attributes_for_point = attribute_count_distr(gen);
     Lorann::attribute_set point_attributes;
+    point_attributes.resize(n_attributes);
     
     for (int k = 0; k < n_attributes_for_point; ++k) {
       int selected_attr_idx = attribute_selector_distr(gen);
-      if (selected_attr_idx == 0 && !point_attributes.count(0)) n_this_attribute_points++;
-      point_attributes.insert(selected_attr_idx);
+      // if (selected_attr_idx == 0 && !point_attributes.count(0)) n_this_attribute_points++;
+      point_attributes.set(selected_attr_idx);
     }
     
     attributes.push_back(point_attributes);
@@ -80,12 +81,12 @@ RowMatrix* load_vectors(int n_input_vecs=999994) {
     }
     ++i;
   }
-  std::cout << "n_this_attribute_points for idx 0: " << n_this_attribute_points << std::endl;
-  int n_this_attribute_points_set = 0;
-  for (const auto& point_set: attributes) {
-    if (point_set.count(0)) n_this_attribute_points_set++;
-  }
-  std::cout << "n_this_attribute_points_set for idx 0: " << n_this_attribute_points_set << std::endl;
+  // std::cout << "n_this_attribute_points for idx 0: " << n_this_attribute_points << std::endl;
+  // int n_this_attribute_points_set = 0;
+  // for (const auto& point_set: attributes) {
+  //   // if (point_set.count(0)) n_this_attribute_points_set++;
+  // }
+  // std::cout << "n_this_attribute_points_set for idx 0: " << n_this_attribute_points_set << std::endl;
   std::cout << "Loading data complete" << std::endl;
   return ret_ptr;//().topRows(100000);
 }
@@ -127,7 +128,9 @@ float filter(int q_idx, bool exact_search, int k,  int clusters_to_search, int p
   RowMatrix Q = (*Q_ptr).topRows(1000);
   auto it = std::find(attribute_strings.begin(), attribute_strings.end(), filter_attribute);
   int filter_idx = it - attribute_strings.begin();
-  Lorann::attribute_set filter_attributes = {filter_idx};
+  Lorann::attribute_set filter_attributes;
+  filter_attributes.resize(n_attributes);
+  filter_attributes.set(filter_idx);
   Eigen::VectorXi exact_indices(k);
   Eigen::VectorXi approx_indices(k);
   index.exact_search((*Q_ptr).row(q_idx).data(), k, exact_indices.data(), filter_attributes, filter_approach);
@@ -177,11 +180,12 @@ extern "C" {
     const char* exact_search_approach) {
     Lorann::Lorann<Lorann::SQ4Quantizer> index = *index_ptr;
     Lorann::attribute_set filter_attributes;
+    filter_attributes.resize(n_attributes);
     std::cout << "n_filter_attributes: " << n_filter_attributes << std::endl;
     for (int i = 0; i<n_filter_attributes; ++i) {
       auto it = std::find(attribute_strings.begin(), attribute_strings.end(), string_filter_attributes[i]);
       int filter_idx = it - attribute_strings.begin();
-      filter_attributes.insert(filter_idx);
+      filter_attributes.set(filter_idx);
     }
     std::vector<float> recall_vec(n_idxs);
     std::chrono::microseconds total_exact_duration = (std::chrono::microseconds) 0;
@@ -229,13 +233,13 @@ extern "C" {
     for (const auto& exact_indices: all_exact_indices) {
       for (const auto& idx: exact_indices) {
         Lorann::attribute_set idx_attributes = attributes[idx];
-        bool all_match = true;
-        for (int filter_idx: filter_attributes) {
-          if (!idx_attributes.count(filter_idx)) {
-            all_match = false;
+        bool all_match = (idx_attributes & filter_attributes) == filter_attributes;
+        // for (int filter_idx: filter_attributes) {
+        //   if (!idx_attributes.count(filter_idx)) {
+        //     all_match = false;
             
-          }  
-        }
+        //   }  
+        // }
         if (all_match) exact_indices_true_matches++;
         // Lorann::attribute_set::const_iterator it = idx_attributes.find(filter_idx);
         // std::cout << attribute_strings[*it] << " ";
@@ -246,13 +250,13 @@ extern "C" {
     for (const auto& approx_indices: all_approx_indices) {
       for (const auto& idx: approx_indices) {
         Lorann::attribute_set idx_attributes = attributes[idx];
-        bool all_match = true;
-        for (int filter_idx: filter_attributes) {
-          if (!idx_attributes.count(filter_idx)) {
-            all_match = false;
+        bool all_match = (idx_attributes & filter_attributes) == filter_attributes;
+        // for (int filter_idx: filter_attributes) {
+        //   if (!idx_attributes.count(filter_idx)) {
+        //     all_match = false;
             
-          }  
-        }
+        //   }  
+        // }
         if (all_match) approx_indices_true_matches++;
       }
     }

@@ -11,6 +11,8 @@
 #include <set>
 #include <boost/container/flat_set.hpp>
 #include "miniselect/pdqselect.h"
+#include <boost/dynamic_bitset.hpp>
+
 
 #if defined(__ARM_NEON) || defined(__ARM_NEON__)
 #include <arm_neon.h>
@@ -512,14 +514,40 @@ std::vector<std::vector<T>> split_vector(const std::vector<T>& input, size_t n) 
 }
 
 struct set_hash {
-  template <typename T>
-  size_t operator()(const boost::container::flat_set<T>& s) const {
-      size_t hash_value = 0;
-      for (const auto& elem : s) {
-          hash_value ^= std::hash<T>{}(elem) + 0x9e3779b9 + (hash_value << 6) + (hash_value >> 2);
-      }
-      return hash_value;
+  // template <typename T>
+  size_t operator()(const boost::dynamic_bitset<>& bs) const {
+    return boost::hash_value(bs);  
+    // size_t hash_value = 0;
+    //   for (const auto& elem : s) {
+    //       hash_value ^= std::hash<T>{}(elem) + 0x9e3779b9 + (hash_value << 6) + (hash_value >> 2);
+    //   }
+    //   return hash_value;
   }
+};
+
+#include <cstdint>
+
+inline std::size_t mix64(std::uint64_t x) {
+    x ^= x >> 30;
+    x *= 0xbf58476d1ce4e5b9ULL;
+    x ^= x >> 27;
+    x *= 0x94d049bb133111ebULL;
+    x ^= x >> 31;
+    return static_cast<std::size_t>(x);
+}
+
+struct FastBitsetHash {
+    std::size_t operator()(const boost::dynamic_bitset<>& bs) const {
+        std::size_t h = 0xcbf29ce484222325ULL; // FNV offset basis
+        std::vector<unsigned long> blocks;
+        boost::to_block_range(bs, std::back_inserter(blocks));
+
+        for (auto b : blocks) {
+            h ^= mix64(static_cast<std::uint64_t>(b));
+            h *= 0x100000001b3ULL; // FNV prime
+        }
+        return h;
+    }
 };
 
 }  // namespace Lorann

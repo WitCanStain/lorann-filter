@@ -13,7 +13,7 @@
 #define GLOBAL_DIM_REDUCTION_SAMPLES 16384
 
 namespace Lorann {
-typedef std::unordered_set<int> attribute_set;
+typedef boost::container::flat_set<int> attribute_set;
 //typedef boost::container::flat_set<int> attribute_set;
 typedef std::unordered_map<attribute_set, std::vector<int>, set_hash> attribute_data_map;
 

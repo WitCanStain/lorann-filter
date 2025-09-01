@@ -125,7 +125,7 @@ class Lorann : public LorannBase {
     int cumulative_found_points = 0;
     auto stop_prework = std::chrono::high_resolution_clock::now();
     auto start_clusters = std::chrono::high_resolution_clock::now();
-    std::chrono::microseconds total_filter_duration = (std::chrono::microseconds) 0;
+    std::chrono::nanoseconds total_filter_duration = (std::chrono::nanoseconds) 0;
     std::chrono::microseconds total_filter_preloop_duration = (std::chrono::microseconds) 0;
     std::chrono::microseconds total_prefilter_duration = (std::chrono::microseconds) 0;
     for (int i = 0; i < clusters_to_search; ++i) {
@@ -160,24 +160,25 @@ class Lorann : public LorannBase {
         auto start_indexing = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < attribute_idx.size(); ++i) { // for each data point in the smallest index which the datapoints belong to, check if the data point has the other filter attributes as well, if yes then add to filtered list.
           bool filters_match = true;
-          int true_idx = attribute_idx[i];
+          // int true_idx = attribute_idx[i];
           for (const auto& attr: filter_attributes) {
-            if (!_attributes[true_idx].count(attr)) {
+            if (!_attributes[attribute_idx[i]].count(attr)) {
               filters_match = false;
               break;
             }
           }
           if (filters_match) {
-            attribute_data_idxs.push_back(true_idx);
-            if (index_map.count(true_idx)) {
-              cluster_attribute_data_idxs.push_back(index_map.at(true_idx)); // cluster_attribute_data_idxs is used during the quantized_matvec_product_B_filter method to determine which columns of the B matrix should be kept or discarded
+            attribute_data_idxs.push_back(attribute_idx[i]);
+            if (index_map.count(attribute_idx[i])) {
+              cluster_attribute_data_idxs.push_back(index_map.at(attribute_idx[i])); // cluster_attribute_data_idxs is used during the quantized_matvec_product_B_filter method to determine which columns of the B matrix should be kept or discarded
             }
             matching_results_found = true;
           }
         }
         auto stop_indexing = std::chrono::high_resolution_clock::now();
-        auto duration_indexing = std::chrono::duration_cast<std::chrono::microseconds>(stop_indexing - start_indexing);
+        auto duration_indexing = std::chrono::duration_cast<std::chrono::nanoseconds>(stop_indexing - start_indexing);
         total_filter_duration += duration_indexing;
+        
         auto duration_preloop = std::chrono::duration_cast<std::chrono::microseconds>(stop_preloop - start_preloop);
         total_filter_preloop_duration += duration_preloop;
         
@@ -245,7 +246,7 @@ class Lorann : public LorannBase {
       throw std::runtime_error("No matches found for filter attributes!");
     }
     if (verbose) {
-      if (filter_approach == "indexing") std::cout << "total_filter_duration: " << total_filter_duration.count() << " microseconds" << std::endl;
+      if (filter_approach == "indexing") std::cout << "total_filter_duration: " << ((double) total_filter_duration.count()) / 1000 << " microseconds" << std::endl;
       if (filter_approach == "indexing") std::cout << "total_filter_preloop_duration: " << total_filter_preloop_duration.count() << " microseconds" << std::endl;
       if (filter_approach == "prefilter") std::cout << "total_prefilter_duration: " << total_prefilter_duration.count() << " microseconds" << std::endl;
       std::cout << "!! Average ratio of satisfactory points to cluster size: " << ((double) cumulative_found_points) / cumulative_cluster_size << std::endl;

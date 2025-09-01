@@ -9,7 +9,7 @@
 #include <chrono>
 
 typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> RowMatrix;
-std::vector<std::unordered_set<int>> attributes;
+std::vector<Lorann::attribute_set> attributes;
 
 // const int n_input_vecs = 50000; //999994
 //std::vector<std::string> attribute_strings = {"one", "green", "blue", "yellow", "orange", "purple", "black", "white", "pink", "brown"};
@@ -65,7 +65,7 @@ RowMatrix* load_vectors(int n_input_vecs=999994) {
     int j = 0;
     float value;
     int n_attributes_for_point = attribute_count_distr(gen);
-    std::unordered_set<int> point_attributes(n_attributes_for_point);
+    Lorann::attribute_set point_attributes;
     
     for (int k = 0; k < n_attributes_for_point; ++k) {
       int selected_attr_idx = attribute_selector_distr(gen);
@@ -105,7 +105,7 @@ extern "C" {
       attribute_idxs.push_back(i);
     }
     std::cout << "Building the index..." << std::endl;
-    std::vector<std::unordered_set<int>> sliced_attributes(attributes.begin(), attributes.begin()+X->rows());
+    std::vector<Lorann::attribute_set> sliced_attributes(attributes.begin(), attributes.begin()+X->rows());
     index_ptr = new Lorann::Lorann<Lorann::SQ4Quantizer>(X->data(), X->rows(), X->cols(), n_clusters, global_dim, sliced_attributes, attribute_idxs,
                                               rank, train_size, euclidean, false);
     index_ptr->build(true, -1, n_attr_partitions);
@@ -127,7 +127,7 @@ float filter(int q_idx, bool exact_search, int k,  int clusters_to_search, int p
   RowMatrix Q = (*Q_ptr).topRows(1000);
   auto it = std::find(attribute_strings.begin(), attribute_strings.end(), filter_attribute);
   int filter_idx = it - attribute_strings.begin();
-  std::unordered_set<int> filter_attributes = {filter_idx};
+  Lorann::attribute_set filter_attributes = {filter_idx};
   Eigen::VectorXi exact_indices(k);
   Eigen::VectorXi approx_indices(k);
   index.exact_search((*Q_ptr).row(q_idx).data(), k, exact_indices.data(), filter_attributes, filter_approach);
@@ -176,7 +176,7 @@ extern "C" {
     const char* filter_approach,
     const char* exact_search_approach) {
     Lorann::Lorann<Lorann::SQ4Quantizer> index = *index_ptr;
-    std::unordered_set<int> filter_attributes;
+    Lorann::attribute_set filter_attributes;
     std::cout << "n_filter_attributes: " << n_filter_attributes << std::endl;
     for (int i = 0; i<n_filter_attributes; ++i) {
       auto it = std::find(attribute_strings.begin(), attribute_strings.end(), string_filter_attributes[i]);
@@ -206,7 +206,7 @@ extern "C" {
       Eigen::VectorXi approx_indices(k);
       auto start_approx = std::chrono::high_resolution_clock::now();
       try {
-        index.search((*Q_ptr).row(idxs[i]).data(), k, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_approach, nullptr, false);
+        index.search((*Q_ptr).row(idxs[i]).data(), k, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_approach, nullptr, true);
       } catch (const std::runtime_error &e) {
         std::cout << e.what() << std::endl;
         break;
@@ -228,7 +228,7 @@ extern "C" {
     int exact_indices_true_matches = 0;
     for (const auto& exact_indices: all_exact_indices) {
       for (const auto& idx: exact_indices) {
-        std::unordered_set<int> idx_attributes = attributes[idx];
+        Lorann::attribute_set idx_attributes = attributes[idx];
         bool all_match = true;
         for (int filter_idx: filter_attributes) {
           if (!idx_attributes.count(filter_idx)) {
@@ -237,7 +237,7 @@ extern "C" {
           }  
         }
         if (all_match) exact_indices_true_matches++;
-        // std::unordered_set<int>::const_iterator it = idx_attributes.find(filter_idx);
+        // Lorann::attribute_set::const_iterator it = idx_attributes.find(filter_idx);
         // std::cout << attribute_strings[*it] << " ";
       }
     }
@@ -245,7 +245,7 @@ extern "C" {
     int approx_indices_true_matches = 0;
     for (const auto& approx_indices: all_approx_indices) {
       for (const auto& idx: approx_indices) {
-        std::unordered_set<int> idx_attributes = attributes[idx];
+        Lorann::attribute_set idx_attributes = attributes[idx];
         bool all_match = true;
         for (int filter_idx: filter_attributes) {
           if (!idx_attributes.count(filter_idx)) {

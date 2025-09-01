@@ -6,19 +6,21 @@
 #include "clustering.h"
 #include "serialization.h"
 #include "utils.h"
-
+#include <boost/container/flat_set.hpp>
 #define KMEANS_ITERATIONS 10
 #define KMEANS_MAX_BALANCE_DIFF 16
 #define SAMPLED_POINTS_PER_CLUSTER 256
 #define GLOBAL_DIM_REDUCTION_SAMPLES 16384
 
 namespace Lorann {
+typedef std::unordered_set<int> attribute_set;
+//typedef boost::container::flat_set<int> attribute_set;
+typedef std::unordered_map<attribute_set, std::vector<int>, set_hash> attribute_data_map;
 
-typedef std::unordered_map<std::unordered_set<int>, std::vector<int>, set_hash> attribute_data_map;
 
 class LorannBase {
  public:
-  LorannBase(float *data, int m, int d, int n_clusters, int global_dim, std::vector<std::unordered_set<int>>& attributes, std::vector<int>& attribute_idxs, int rank, int train_size,
+  LorannBase(float *data, int m, int d, int n_clusters, int global_dim, std::vector<attribute_set>& attributes, std::vector<int>& attribute_idxs, int rank, int train_size,
              bool euclidean, bool balanced)
       : _data(data),
         _n_samples(m),
@@ -121,7 +123,7 @@ class LorannBase {
                      int num_threads) {}
 
   virtual void search(const float *data, const int k, const int clusters_to_search,
-                      const int points_to_rerank, int *idx_out, std::unordered_set<int>& filter_attributes, std::string filter_approach, float *dist_out = nullptr, bool verbose=false) const {}
+                      const int points_to_rerank, int *idx_out, attribute_set& filter_attributes, std::string filter_approach, float *dist_out = nullptr, bool verbose=false) const {}
 
   virtual ~LorannBase() {}
 
@@ -133,15 +135,15 @@ class LorannBase {
    * @param out The index output array of length k
    * @param dist_out The (optional) distance output array of length k
    */
-  void exact_search(const float *q, int k, int *out, const std::unordered_set<int>& filter_attributes, std::string filter_approach, float *dist_out = nullptr) const {
+  void exact_search(const float *q, int k, int *out, const attribute_set& filter_attributes, std::string filter_approach, float *dist_out = nullptr) const {
     float *data_ptr = _data;
     int n_datapoints;
     std::vector<int> attribute_data_idxs;
     if (filter_approach == "indexing") {
-      std::unordered_set<int> smallest_idx;
+      attribute_set smallest_idx;
       int smallest_idx_size = _n_samples;
       for (const auto& attr: filter_attributes) {
-        std::unordered_set<int> attr_set = _attribute_index_map[attr];
+        attribute_set attr_set = _attribute_index_map[attr];
         int attr_idx_size = _attribute_data_map[attr_set].size();
         if (attr_idx_size <= smallest_idx_size) {
           smallest_idx = attr_set;
@@ -385,7 +387,7 @@ class LorannBase {
 
   std::vector<std::vector<int>> clustering(KMeans &global_clustering, const float *data,
                                            const int n, const float *train_data, const int train_n,
-                                           const bool approximate, int num_threads, std::vector<std::unordered_set<int>> &attribute_partition_sets) {
+                                           const bool approximate, int num_threads, std::vector<attribute_set> &attribute_partition_sets) {
     const int to_sample = SAMPLED_POINTS_PER_CLUSTER * _n_clusters;
     if (!_balanced && approximate && to_sample < 0.5f * n) {
       /* sample points for k-means */
@@ -533,11 +535,11 @@ class LorannBase {
   bool _euclidean;
   bool _balanced;
   
-  std::vector<std::unordered_set<int>> _attributes;
+  std::vector<attribute_set> _attributes;
   std::vector<int> _attribute_idxs;
   std::vector<std::unordered_map<int, int>> _cluster_index_maps;
   mutable attribute_data_map _attribute_data_map;
-  mutable std::unordered_map<int, std::unordered_set<int>> _attribute_index_map;
+  mutable std::unordered_map<int, attribute_set> _attribute_index_map;
   mutable std::vector<attribute_data_map> _cluster_attribute_data_maps;
 
   /* vector of points assigned to a cluster, for each cluster */

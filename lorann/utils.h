@@ -9,7 +9,7 @@
 #include <unordered_set>
 #include <vector>
 #include <set>
-
+#include <boost/container/flat_set.hpp>
 #include "miniselect/pdqselect.h"
 
 #if defined(__ARM_NEON) || defined(__ARM_NEON__)

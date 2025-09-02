@@ -48,7 +48,6 @@ RowMatrix load_vectors() {
     }
     ++i;
   }
-  std::cout << "test 3 len: " << i << std::endl;
 
   return ret.topRows(100000);
 }

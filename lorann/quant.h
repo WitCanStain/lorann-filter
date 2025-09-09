@@ -518,7 +518,6 @@ struct SQ4Quantizer : SQQuantizer {
                                          float *result, bool verbose=false) const {
     const float *scales = correction.data();
     const float *fix = correction.data() + qA.cols();
-    // std::cout << " using sq4quantizer" << std::endl;
     const int rank = qA.rows() * 2;
     if (rank == 32)
       matvec_product_B_32_filter(qA.data(), v.data(), result, rank, idxs);

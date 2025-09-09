@@ -219,7 +219,7 @@ extern "C" {
       Eigen::VectorXi approx_indices(k);
       auto start_approx = std::chrono::high_resolution_clock::now();
       try {
-        index.search((*Q_ptr).row(idxs[i]).data(), k, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_approach, nullptr, true);
+        index.search((*Q_ptr).row(idxs[i]).data(), k, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_approach, nullptr, false);
       } catch (const std::runtime_error &e) {
         std::cout << e.what() << std::endl;
         break;

@@ -17,7 +17,7 @@ EXPORT_SYMBOL int filter_proc(int n_attr_partitions, int n_clusters, int global_
 
 EXPORT_SYMBOL int filter_wrapper(int* idxs, int n_idxs, bool exact_search, int k,  int clusters_to_search, int points_to_rerank, std::string filter_attribute, std::string filter_approach);
 
-EXPORT_SYMBOL int fast_filter_wrapper_profiled(int* idxs, int n_idxs, int k,  int clusters_to_search, int points_to_rerank, std::string* filter_attributes, int n_filter_attributes, std::string filter_approach, std::string exact_search_approach);
+EXPORT_SYMBOL int fast_filter_wrapper_profiled(int* idxs, int n_idxs, int k,  int clusters_to_search, int points_to_rerank, std::string* filter_attributes, int n_filter_attributes, std::string filter_approach, std::string exact_search_approach, float* recall, int* approx_latency, int* exact_latency);
 
 #ifdef __cplusplus
 }

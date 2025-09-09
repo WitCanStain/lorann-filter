@@ -128,17 +128,18 @@ class Lorann : public LorannBase {
     std::chrono::nanoseconds total_filter_duration = (std::chrono::nanoseconds) 0;
     std::chrono::microseconds total_filter_preloop_duration = (std::chrono::microseconds) 0;
     std::chrono::microseconds total_prefilter_duration = (std::chrono::microseconds) 0;
+    std::chrono::microseconds total_duration_matvec = (std::chrono::microseconds) 0;
     for (int i = 0; i < clusters_to_search; ++i) {
       // std::cout << "searching cluster " << i << "/" << clusters_to_search << std::endl;
       const int cluster = I[i];
       const int sz = _cluster_sizes[cluster];
+      if (sz == 0) continue;
       cumulative_cluster_size += sz;
       // std::cout << "sz: " << sz << std::endl;
       std::vector<int> attribute_data_idxs;
       std::vector<int> cluster_attribute_data_idxs;
       if (filter_approach == "indexing") {
         auto start_preloop = std::chrono::high_resolution_clock::now();
-        const std::unordered_map<int, int>& index_map = _cluster_index_maps[cluster];
         attribute_data_map& this_cluster_attribute_data_map = _cluster_attribute_data_maps[cluster];
         attribute_set smallest_idx;
         smallest_idx.init(1, _n_attributes);
@@ -147,34 +148,12 @@ class Lorann : public LorannBase {
           if (filter_attributes.is_set(0, attr)) {
             attribute_set& attr_set = _attribute_index_map[attr];
             int attr_idx_size = this_cluster_attribute_data_map[attr_set.key(0)].size();
-            // std::cout << "attr_idx_size: " << attr_idx_size << std::endl;
             if (attr_idx_size <= smallest_idx_size) {
               smallest_idx = attr_set;
               smallest_idx_size = this_cluster_attribute_data_map[attr_set.key(0)].size();
             }
           }
         }
-
-        // std::cout << "smallest_idx.size() for cluster " << cluster << ": " << this_cluster_attribute_data_map[smallest_idx.key(0)].size() << std::endl;
-        // std::cout << "index: ";
-        // smallest_idx.to_string();
-        // for (std::size_t attr = filter_attributes.find_first(); attr != attribute_set::npos; attr = filter_attributes.find_next(attr)) {
-        //   attribute_set& attr_set = _attribute_index_map[attr];
-        //   int attr_idx_size = this_cluster_attribute_data_map[attr_set].size();
-        //   if (attr_idx_size <= smallest_idx_size) {
-        //     smallest_idx = attr_set;
-        //     smallest_idx_size = attr_idx_size;
-        //   }
-        // }
-        // for (const auto& attr: filter_attributes) { // find the smallest index which has the required data points
-        //   attribute_set& attr_set = _attribute_index_map[attr];
-        //   int attr_idx_size = this_cluster_attribute_data_map[attr_set].size();
-        //   // std::cout << "attr_idx_size for attribute " << attr << ": " << attr_idx_size << std::endl;
-        //   if (attr_idx_size <= smallest_idx_size) {
-        //     smallest_idx = attr_set;
-        //     smallest_idx_size = attr_idx_size;
-        //   }
-        // }
         std::vector<int>& attribute_idx = this_cluster_attribute_data_map[smallest_idx.key(0)];
         attribute_data_idxs.reserve(attribute_idx.size());
         cluster_attribute_data_idxs.reserve(attribute_idx.size());
@@ -183,19 +162,9 @@ class Lorann : public LorannBase {
         auto start_indexing = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < attribute_idx.size(); ++i) { // for each data point in the smallest index which the datapoints belong to, check if the data point has the other filter attributes as well, if yes then add to filtered list.
           bool filters_match = _attributes.matches(attribute_idx[i], filter_attributes);
-          // bool filters_match = (_attributes[attribute_idx[i]] & filter_attributes) == filter_attributes;
-          // int true_idx = attribute_idx[i];
-          // for (const auto& attr: filter_attributes) {
-          //   if (!_attributes[attribute_idx[i]].count(attr)) {
-          //     filters_match = false;
-          //     break;
-          //   }
-          // }
           if (filters_match) {
             attribute_data_idxs.push_back(attribute_idx[i]);
-            if (index_map.count(attribute_idx[i])) {
-              cluster_attribute_data_idxs.push_back(index_map.at(attribute_idx[i])); // cluster_attribute_data_idxs is used during the quantized_matvec_product_B_filter method to determine which columns of the B matrix should be kept or discarded
-            }
+            cluster_attribute_data_idxs.push_back(i);
             matching_results_found = true;
           }
         }
@@ -210,12 +179,6 @@ class Lorann : public LorannBase {
         auto start_prefilter = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < sz; i++) {
           bool filters_match = _attributes.matches(_cluster_map[cluster][i], filter_attributes);
-          // bool filters_match = (_attributes[_cluster_map[cluster][i]] & filter_attributes) == filter_attributes;
-          // for (const auto& attribute: filter_attributes) {
-          //   if (!_attributes[_cluster_map[cluster][i]].count(attribute)) {
-          //     all_found = false;
-          //   }
-          // }
           if (filters_match) {
             attribute_data_idxs.push_back(_cluster_map[cluster][i]);
             matching_results_found = true;
@@ -224,11 +187,10 @@ class Lorann : public LorannBase {
         auto stop_prefilter = std::chrono::high_resolution_clock::now();
         auto duration_prefilter = std::chrono::duration_cast<std::chrono::microseconds>(stop_prefilter - start_prefilter);
         total_prefilter_duration += duration_prefilter;
-        // std::cout << "duration_prefilter: " << duration_prefilter.count() << " microseconds" << std::endl;
       }
       int n_filtered_cluster_datapoints = attribute_data_idxs.size();
       cumulative_found_points += n_filtered_cluster_datapoints;
-      if (sz == 0 || ( filter_approach != "postfilter" && n_filtered_cluster_datapoints == 0)) continue;
+      if (( filter_approach != "postfilter" && n_filtered_cluster_datapoints == 0)) continue;
       const ColMatrixUInt8 &A = _A[cluster];
       const ColMatrixUInt8 &B = _B[cluster];
       const Vector &A_correction = _A_corrections[cluster];
@@ -244,6 +206,7 @@ class Lorann : public LorannBase {
       const float compensation_tmp =
           quantized_query_doubled.cast<float>().sum() * quant_data.compensation_factor;
       /* compute r = s^T B */
+      auto start_matvec = std::chrono::high_resolution_clock::now();
       if (filter_approach == "prefilter" || filter_approach == "indexing") {
         quant_data.quantized_matvec_product_B_filter(B, quantized_query_doubled, &cluster_attribute_data_idxs, B_correction, tmpfact,
                                                     principal_axis_tmp, compensation_tmp,
@@ -253,6 +216,9 @@ class Lorann : public LorannBase {
                                                     principal_axis_tmp, compensation_tmp,
                                                     &all_distances[current_cumulative_size]);
       }
+      auto stop_matvec = std::chrono::high_resolution_clock::now();
+      auto duration_matvec = std::chrono::duration_cast<std::chrono::microseconds>(stop_matvec - start_matvec);
+      total_duration_matvec += duration_matvec;
       if (_euclidean)
         add_inplace(_cluster_norms[cluster].data(), &all_distances[current_cumulative_size],
                     _cluster_norms[cluster].size());
@@ -273,6 +239,7 @@ class Lorann : public LorannBase {
     if (verbose) {
       if (filter_approach == "indexing") std::cout << "total_filter_duration: " << ((double) total_filter_duration.count()) / 1000 << " microseconds" << std::endl;
       if (filter_approach == "indexing") std::cout << "total_filter_preloop_duration: " << total_filter_preloop_duration.count() << " microseconds" << std::endl;
+      if (filter_approach == "indexing") std::cout << "duration_matvec: " << total_duration_matvec.count() << " microseconds" << std::endl;
       if (filter_approach == "prefilter") std::cout << "total_prefilter_duration: " << total_prefilter_duration.count() << " microseconds" << std::endl;
       std::cout << "!! Average ratio of satisfactory points to cluster size: " << ((double) cumulative_found_points) / cumulative_cluster_size << std::endl;
       std::cout << "cumulative_found_points: " << cumulative_found_points << std::endl;
@@ -402,10 +369,9 @@ class Lorann : public LorannBase {
     std::vector<BitsetMatrix> attribute_partition_sets;
     if (n_attribute_partitions >= 0) {
       std::vector<std::vector<int>> attr_subvecs = split_vector(_attribute_idxs, n_attribute_partitions); // partition the attributes into groups of attributes
-      std::cout << "attr_subvecs.size(): " << attr_subvecs.size() << std::endl;
-      for (const auto& subvec : attr_subvecs) {
-        std::cout << subvec.size() << " ";
-      }
+      // for (const auto& subvec : attr_subvecs) {
+      //   std::cout << subvec.size() << " ";
+      // }
       std::cout << std::endl;
       for (const auto& attr_subvec : attr_subvecs) {
         BitsetMatrix attribute_subvec_bitset;

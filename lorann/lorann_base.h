@@ -455,15 +455,6 @@ class LorannBase {
           //   }
           // }
         }
-
-        std::unordered_map<int, int> index_map;
-        for (size_t j = 0; j < _cluster_map[i].size(); ++j) {
-          index_map[_cluster_map[i][j]] = j;
-        }
-        _cluster_index_maps.push_back(index_map);
-        // std::cout << "attribute_data_idx_vec.size() for clustering: " << attribute_data_idx_vec.size() << std::endl;
-        // std::cout << "non_applicable_points: " << non_applicable_points << std::endl;
-        // std::cout << "attribute_data_idx_vec.size() + non_applicable_points: " << attribute_data_idx_vec.size() + non_applicable_points << std::endl;
         this_cluster_attribute_data_map.insert({attr_bitset.key(0), attribute_data_idx_vec});
       }
       _cluster_attribute_data_maps.push_back(this_cluster_attribute_data_map); // add cluster attribute data map to vector of all cluster attribute data maps
@@ -557,7 +548,6 @@ class LorannBase {
 
   BitsetMatrix _attributes;
   std::vector<int> _attribute_idxs;
-  std::vector<std::unordered_map<int, int>> _cluster_index_maps;
   mutable attribute_data_map _attribute_data_map;
   mutable std::unordered_map<int, attribute_set> _attribute_index_map;
   mutable std::vector<attribute_data_map> _cluster_attribute_data_maps;

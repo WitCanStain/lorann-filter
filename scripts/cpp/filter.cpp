@@ -91,7 +91,7 @@ RowMatrix* load_vectors(int n_input_vecs=999994) {
   //   std::cout << std::endl << std::endl;
   // }
   // if (all_true) std::cout << "all true!" << std::endl;
-  std::cout << "Loading data complete" << std::endl;
+  std::cout << "Loading data complete." << std::endl;
   return ret_ptr;//().topRows(100000);
 }
 
@@ -105,7 +105,6 @@ extern "C" {
     Q_ptr = X;
     // RowMatrix Q = X.topRows(1000);
     // Q_ptr =  new RowMatrix(X->topRows(100000));
-    std::cout << "filter.cpp attribute_strings.size(): " << attribute_strings.size() << std::endl;
     for (int i = 0; i < attribute_strings.size(); ++i) {
       attribute_idxs.push_back(i);
     }
@@ -180,19 +179,22 @@ extern "C" {
     const char** string_filter_attributes,
     int n_filter_attributes,
     const char* filter_approach,
-    const char* exact_search_approach) {
+    const char* exact_search_approach,
+    float* recall,
+    int* approx_latency,
+    int* exact_latency) {
     Lorann::Lorann<Lorann::SQ4Quantizer> index = *index_ptr;
     BitsetMatrix filter_attributes;
     filter_attributes.init(1, n_attributes);
-    std::cout << "n_filter_attributes: " << n_filter_attributes << std::endl;
+    // std::cout << "n_filter_attributes: " << n_filter_attributes << std::endl;
     for (int i = 0; i<n_filter_attributes; ++i) {
       auto it = std::find(attribute_strings.begin(), attribute_strings.end(), string_filter_attributes[i]);
       int filter_idx = it - attribute_strings.begin();
       filter_attributes.set(0, filter_idx);
     }
-    for (int i = 0; i < n_attributes; ++i) {
-      std::cout << filter_attributes.is_set(0,i);
-    }
+    // for (int i = 0; i < n_attributes; ++i) {
+    //   std::cout << filter_attributes.is_set(0,i);
+    // }
     std::cout << std::endl;
     std::vector<float> recall_vec(n_idxs);
     std::chrono::microseconds total_exact_duration = (std::chrono::microseconds) 0;
@@ -217,7 +219,7 @@ extern "C" {
       Eigen::VectorXi approx_indices(k);
       auto start_approx = std::chrono::high_resolution_clock::now();
       try {
-        index.search((*Q_ptr).row(idxs[i]).data(), k, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_approach, nullptr, false);
+        index.search((*Q_ptr).row(idxs[i]).data(), k, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_approach, nullptr, true);
       } catch (const std::runtime_error &e) {
         std::cout << e.what() << std::endl;
         break;
@@ -243,7 +245,8 @@ extern "C" {
         if (matches) exact_indices_true_matches++;
       }
     }
-    std::cout << "Exact indices match rate: " << ((double) exact_indices_true_matches) / (n_idxs*k) << std::endl;
+    double exact_indices_match_rate = ((double) exact_indices_true_matches) / (n_idxs*k);
+    if (exact_indices_match_rate < 1) std::cout << "Exact indices match rate: " << exact_indices_match_rate<< std::endl;
     int approx_indices_true_matches = 0;
     for (const auto& approx_indices: all_approx_indices) {
       for (const auto& idx: approx_indices) {
@@ -251,7 +254,8 @@ extern "C" {
         if (matches) approx_indices_true_matches++;
       }
     }
-    std::cout << "Approximate indices match rate: " << ((double) approx_indices_true_matches) / (n_idxs*k) << std::endl;
+    double approx_indices_match_rate = ((double) approx_indices_true_matches) / (n_idxs*k);
+    if (approx_indices_match_rate < 1) std::cout << "Approximate indices match rate: " << ((double) approx_indices_true_matches) / (n_idxs*k) << std::endl;
     std::chrono::microseconds avg_exact_duration = total_exact_duration / n_idxs;
     std::chrono::microseconds avg_approx_duration = total_approx_duration / n_idxs;
     std::cout << "Average exact query duration: " << avg_exact_duration.count() << " microseconds" << std::endl;
@@ -268,6 +272,10 @@ extern "C" {
     //   std::cout << idx << ", ";
     // }
     // std::cout << "]";
+    *recall = avg_recall;
+    std::cout << "avg_recall c++: " << avg_recall;
+    *approx_latency = avg_approx_duration.count();
+    *exact_latency = avg_exact_duration.count();
     return avg_recall;
   }
 }

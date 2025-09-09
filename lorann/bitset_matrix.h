@@ -9,7 +9,7 @@
 
 class BitsetMatrix {
 public:
-    using Block = uint64_t;
+    using Block = uint32_t;
     static constexpr size_t BITS_PER_BLOCK = sizeof(Block) * 8;
     std::vector<Block> data;
     BitsetMatrix() = default;  // allow empty construction

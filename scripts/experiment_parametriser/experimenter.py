@@ -5,26 +5,41 @@ from numpy.ctypeslib import ndpointer
 import numpy as np
 import time
 import random
+import matplotlib.pyplot as plt
+
 if __name__ == "__main__":
     # Load the shared library into ctypes
-    random.seed(41)
+    random.seed(42)
     script_dir = pathlib.Path(__file__).resolve().parent
     libname = script_dir.parent / "cpp" / "libfilter.so"
     c_lib = ctypes.CDLL(libname)
     c_lib.build_index.restype = ctypes.c_bool
     c_lib.build_index.argtypes = ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool
     
-    c_lib.filter.restype = ctypes.c_float
-    c_lib.filter.argtypes = ctypes.c_int, ctypes.c_bool, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p
+    # c_lib.filter.restype = ctypes.c_float
+    # c_lib.filter.argtypes = ctypes.c_int, ctypes.c_bool, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p
 
-    c_lib.filter_proc.restype = ctypes.c_int
-    c_lib.filter_proc.argtypes = ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool, ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.c_bool, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p
+    # c_lib.filter_proc.restype = ctypes.c_int
+    # c_lib.filter_proc.argtypes = ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool, ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.c_bool, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p
 
-    c_lib.filter_wrapper.restype = ctypes.c_float
-    c_lib.filter_wrapper.argtypes = ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.c_bool, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p
+    # c_lib.filter_wrapper.restype = ctypes.c_float
+    # c_lib.filter_wrapper.argtypes = ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.c_bool, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p
 
     c_lib.fast_filter_wrapper_profiled.restype = ctypes.c_float
-    c_lib.fast_filter_wrapper_profiled.argtypes = ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.POINTER(ctypes.c_char_p), ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p
+    c_lib.fast_filter_wrapper_profiled.argtypes = (
+        ctypes.POINTER(ctypes.c_int), 
+        ctypes.c_int, 
+        ctypes.c_int, 
+        ctypes.c_int, 
+        ctypes.c_int, 
+        ctypes.POINTER(ctypes.c_char_p), 
+        ctypes.c_int, 
+        ctypes.c_char_p, 
+        ctypes.c_char_p, 
+        ctypes.POINTER(ctypes.c_float), 
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(ctypes.c_int))
+
 
     # index parameters
     n_attr_partitions = 10
@@ -43,32 +58,12 @@ if __name__ == "__main__":
             "clusters_to_search": 64,
             "points_to_rerank": 2000,
             "k": 10,
-            "filter_attributes": ["one", "two", "three"],
-            "filter_approach": "prefilter",
-            "exact_search_approach": "prefilter",
-            "n_repeat_runs": 1,
-            "query_indices": query_indices,
-        },
-        {
-            "clusters_to_search": 64,
-            "points_to_rerank": 2000,
-            "k": 10,
-            "filter_attributes": ["one", "two", "three"],
+            "filter_attributes": ["one", "two"],
             "filter_approach": "indexing",
             "exact_search_approach": "prefilter",
             "n_repeat_runs": 1,
             "query_indices": query_indices,
         },
-        # {
-        #     "clusters_to_search": 64,
-        #     "points_to_rerank": 2000,
-        #     "k": 10,
-        #     "filter_attributes": ["one"],
-        #     "filter_approach": "indexing",
-        #     "exact_search_approach": "postfilter",
-        #     "n_repeat_runs": 1,
-        #     "query_indices": query_indices,
-        # }
     ]
     
     
@@ -89,14 +84,14 @@ if __name__ == "__main__":
     end_time = time.process_time()
     elapsed_time = end_time - start_time
     print("Time taken to build index: ", elapsed_time)
-
+    outputs = []
 
     print(f"Index parameters:\nn_attr_partitions = {n_attr_partitions}\nn_input_vecs = {n_input_vecs}\nn_clusters = {n_clusters}\nglobal_dim = {global_dim}\nrank = {rank}\ntrain_size = {train_size}\neuclidean = {euclidean}\n\n")
     for param_set in search_param_sets:
         print(f"Using {n_input_vecs} inputs and {param_set["filter_approach"]} filter method and {param_set["exact_search_approach"]} exact search approach.")
         print(f"Running experimenter with search parameters:\n\
     clusters_to_search = {param_set["clusters_to_search"]}\npoints_to_rerank = {param_set["points_to_rerank"]}\nk = {param_set["k"]}\nfilter_attribute = {param_set["filter_attributes"]}\nfilter_approach = {param_set["filter_approach"]}\nexact_search_approach = {param_set["exact_search_approach"]}\n\n\
-    experiment parameters:\nn_repeat_runs = {param_set["n_repeat_runs"]}\nn_query_indices = {len(param_set["query_indices"])}\nquery_indices = {param_set["query_indices"]}\n\n")
+    experiment parameters:\nn_repeat_runs = {param_set["n_repeat_runs"]}\nn_query_indices = {len(param_set["query_indices"])}\n") #\nquery_indices = {param_set["query_indices"]}
 
         filter_attributes_b = [s.encode("utf-8") for s in param_set["filter_attributes"]]
         FilterArrayType = ctypes.c_char_p * len(filter_attributes_b)
@@ -108,23 +103,56 @@ if __name__ == "__main__":
         # run the experiment
         
         start_time = time.process_time()
+        recalls = []
+        approx_latencies = []
+        exact_latencies = []
         for i in range(n_repeat_runs):
-            avg_recall = c_lib.fast_filter_wrapper_profiled(
+            recall = ctypes.c_float(0.)
+            approx_latency = ctypes.c_int(0)
+            exact_latency = ctypes.c_int(0)
+            c_lib.fast_filter_wrapper_profiled(
                 arr.ctypes.data_as(ctypes.POINTER(ctypes.c_int)), 
-                len(arr), 
-                param_set["k"], 
-                param_set["clusters_to_search"], 
-                param_set["points_to_rerank"], 
+                len(arr),
+                param_set["k"],
+                param_set["clusters_to_search"],
+                param_set["points_to_rerank"],
                 filter_attributes_c,
                 len(param_set["filter_attributes"]),
-                ctypes.c_char_p(filter_approach_b_string), 
-                ctypes.c_char_p(exact_search_approach_b_string)
+                ctypes.c_char_p(filter_approach_b_string),
+                ctypes.c_char_p(exact_search_approach_b_string),
+                ctypes.byref(recall),
+                ctypes.byref(approx_latency),
+                ctypes.byref(exact_latency)
             )
-
+            recalls.append(recall.value)
+            approx_latencies.append(approx_latency.value)
+            exact_latencies.append(exact_latency.value)
+        print(recalls)
         end_time = time.process_time()
         elapsed_time = end_time - start_time
+        total_approx_latency = sum(approx_latencies)
+        total_exact_latency = sum(exact_latencies)
+        total_recall = sum(recalls)
+        avg_approximate_search_latency = int(total_approx_latency) / n_repeat_runs
+        avg_exact_search_latency = int(total_exact_latency) / n_repeat_runs
+        avg_recall = total_recall / n_repeat_runs
         print("Average recall: ", avg_recall)
-        avg_elapsed_time_run = elapsed_time / (n_repeat_runs)
-        avg_elapsed_time = elapsed_time / (n_repeat_runs * len(param_set["query_indices"]))
-        # print("avg_elapsed_time per run: ", avg_elapsed_time_run)
+        print("Average exact search latency: ", avg_exact_search_latency, " microseconds")
+        print("Average approximate search latency: ", avg_approximate_search_latency, " microseconds")
+        outputs.append({**param_set, "recall": avg_recall, "approx_latency": avg_approximate_search_latency, "exact_latency": avg_exact_search_latency})
+
+
+    all_recalls = [o["recall"] for o in outputs]
+    all_approximate_latencies = [o["approx_latency"] for o in outputs]
+    all_exact_latencies = [o["exact_latency"] for o in outputs]
+
+    
+
+    plt.plot(all_recalls, all_approximate_latencies)
+    plt.ylabel("Latency")
+    plt.xlabel("Recall")
+    plt.savefig('../../figures/recall-latency.png')
+    # plt.show()
+
+
     

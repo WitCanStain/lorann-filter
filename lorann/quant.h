@@ -463,30 +463,17 @@ struct SQ4Quantizer : SQQuantizer {
     }
   }
 
-  inline void matvec_product_B_32_filter(const uint8_t *A, int Asize, const int8_t *x, float *result,
-                                  const size_t rows, std::vector<int>* idxs, bool verbose=false) const {
-    // std::cout << "(*idxs).size(): " << (*idxs).size() << std::endl;
-    // std::cout << "Asize: " << Asize << std::endl;
-    int highest_num = 0;
+  inline void matvec_product_B_32_filter(const uint8_t *B, const int8_t *x, float *result,
+                                  const size_t rows, std::vector<int>* idxs) const {
     for (size_t j = 0; j < (*idxs).size(); ++j) {
       size_t i = (*idxs)[j];
       int32_t sum = 0;
-      // std::cout << "j: " << j << "|" << std::endl;
-      // if (verbose) std::cout << "i: " << i << "|" << std::endl;
       for (int k = 0; k < 16; ++k) {
-        // std::cout << "k: " << k << std::endl;
-        // if (verbose) std::cout << "Asize: " << Asize << std::endl;
-        // if (verbose) std::cout << "k+i*16: " << k + i * 16 << std::endl;
-        highest_num = std::max(highest_num, (int)(k + i * 16));
-        // if (verbose) std::cout << "A[k + i * 16]: " << (int)A[k + i * 16] << std::endl;
-        sum += ((int32_t)(A[k + i * 16] >> 4)) * ((int32_t)x[k + 16]);
-        // std::cout << "here" << std::endl;
-        sum += ((int32_t)(A[k + i * 16] & 0xF)) * ((int32_t)x[k]);
+        sum += ((int32_t)(B[k + i * 16] >> 4)) * ((int32_t)x[k + 16]);
+        sum += ((int32_t)(B[k + i * 16] & 0xF)) * ((int32_t)x[k]);
       }
-      // std::cout << "j: " << j << " ";
       result[j] = sum;
     }
-    // if (verbose) std::cout << "highest_num: " << highest_num << std::endl;
   }
 
   inline void matvec_product_B_64_filter(const uint8_t *A, const int8_t *x, float *result,
@@ -534,7 +521,7 @@ struct SQ4Quantizer : SQQuantizer {
     // std::cout << " using sq4quantizer" << std::endl;
     const int rank = qA.rows() * 2;
     if (rank == 32)
-      matvec_product_B_32_filter(qA.data(), qA.size(), v.data(), result, rank, idxs, verbose);
+      matvec_product_B_32_filter(qA.data(), v.data(), result, rank, idxs);
     else if (rank == 16)
       matvec_product_B_16_filter(qA.data(), v.data(), result, rank, idxs);
     else

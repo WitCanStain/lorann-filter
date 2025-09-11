@@ -6,10 +6,11 @@
 #include <algorithm>
 #include <functional>
 #include <iostream>
+#include <immintrin.h>
 
 class BitsetMatrix {
 public:
-    using Block = uint32_t;
+    using Block = uint64_t;
     static constexpr size_t BITS_PER_BLOCK = sizeof(Block) * 8;
     std::vector<Block> data;
     BitsetMatrix() = default;  // allow empty construction
@@ -193,6 +194,89 @@ public:
                                data.begin() + start + blocks_per_bitset)
         };
     }
+
+    
+
+    void get_set_bit_positions_simd(const uint64_t* data, std::vector<size_t>* idxs) {
+        size_t base = 0;
+        for (size_t i = 0; i < blocks_per_bitset; i += 4) { // process 4 blocks (256 bits) at once
+            __m256i v = _mm256_loadu_si256((__m256i*)&data[i]);
+            if (_mm256_testz_si256(v, v)) {
+                base += 256;
+                continue; // all zero
+            }
+            // fall back to scalar extraction for each of the 4 blocks
+            for (int j = 0; j < 4; ++j) {
+                uint64_t block = data[i + j];
+                while (block) {
+                    int pos = __builtin_ctzll(block);
+                    idxs->push_back(base + pos);
+                    block &= (block - 1);
+                }
+                base += 64;
+            }
+        }
+    }
+
+    class Iterator {
+    public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = size_t;
+        using difference_type = std::ptrdiff_t;
+        using pointer = const size_t*;
+        using reference = const size_t&;
+
+        Iterator(const BitsetMatrix* bs, size_t block_idx, uint64_t block_mask)
+            : bs(bs), block_idx(block_idx), block_mask(block_mask), offset(0) 
+        {
+            advance_to_next_set_bit();
+        }
+
+        size_t operator*() const {
+            return block_idx * 64 + offset;
+        }
+
+        Iterator& operator++() {
+            // clear current bit
+            block_mask &= block_mask - 1;
+            advance_to_next_set_bit();
+            return *this;
+        }
+
+        bool operator==(const Iterator& other) const {
+            return bs == other.bs && block_idx == other.block_idx && block_mask == other.block_mask;
+        }
+
+        bool operator!=(const Iterator& other) const {
+            return !(*this == other);
+        }
+
+    private:
+        const BitsetMatrix* bs;
+        size_t block_idx;
+        uint64_t block_mask;
+        size_t offset;
+
+        void advance_to_next_set_bit() {
+            while (block_mask == 0 && block_idx < bs->blocks_per_bitset) {
+                ++block_idx;
+                if (block_idx < bs->blocks_per_bitset)
+                    block_mask = bs->data[block_idx];
+            }
+            if (block_mask != 0) {
+                offset = __builtin_ctzll(block_mask);
+            }
+        }
+    };
+
+    Iterator begin() const {
+        return Iterator(this, 0, data.empty() ? 0 : data[0]);
+    }
+
+    Iterator end() const {
+        return Iterator(this, blocks_per_bitset, 0);
+    }
+
 
 private:
     size_t n_points = 0;

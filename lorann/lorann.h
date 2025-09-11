@@ -142,11 +142,16 @@ class Lorann : public LorannBase {
       if (filter_approach == "indexing") {
         std::vector<Bitset> this_cluster_attribute_bitsets = _cluster_attribute_bitsets[cluster];
         auto start_indexing = std::chrono::high_resolution_clock::now();
-        Bitset filtered_datapoints(_n_samples, true);
+        Bitset filtered_datapoints(sz, true);
         for (size_t idx: filter_attributes) {
           this_cluster_attribute_bitsets[idx].bitwise_and(filtered_datapoints, filtered_datapoints);
         }
-        std::vector<size_t> attribute_data_idxs = filtered_datapoints.get_set_bit_positions();
+        const std::vector<size_t> cluster_attribute_data_idxs = filtered_datapoints.get_set_bit_positions();
+        if (cluster_attribute_data_idxs.size() > 0) matching_results_found = true;
+        attribute_data_idxs.reserve(cluster_attribute_data_idxs.size());
+        for (int i: cluster_attribute_data_idxs) {
+          attribute_data_idxs.push_back(_cluster_map[cluster][i]);
+        }
         auto stop_indexing = std::chrono::high_resolution_clock::now();
         // attribute_data_map& this_cluster_attribute_data_map = _cluster_attribute_data_maps[cluster];
         // attribute_set smallest_idx;
@@ -374,7 +379,7 @@ class Lorann : public LorannBase {
       // for (const auto& subvec : attr_subvecs) {
       //   std::cout << subvec.size() << " ";
       // }
-      
+      std::cout << "beginning bitsets, _n_samples: " << _n_samples << std::endl;
       for (size_t i: _attribute_idxs) {
 
         Bitset attribute_bitset(_n_samples);
@@ -384,8 +389,8 @@ class Lorann : public LorannBase {
           }
         }
         _all_attribute_bitsets.push_back(attribute_bitset);
-
       }
+      std::cout << "end bitsets" << std::endl;
       // for (const auto& attr_subvec : attr_subvecs) {
       //   BitsetMatrix attribute_subvec_bitset;
       //   attribute_subvec_bitset.init(1, _n_attributes);

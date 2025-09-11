@@ -147,6 +147,7 @@ class LorannBase {
     if (filter_approach == "indexing") {
       Bitset filtered_datapoints(_n_samples, true);
       for (size_t idx: filter_attributes) {
+        std::cout << "filter_attributes idx: " << idx << " ";
         _all_attribute_bitsets[idx].bitwise_and(filtered_datapoints, filtered_datapoints);
       }
       std::vector<size_t> attribute_data_idxs = filtered_datapoints.get_set_bit_positions();
@@ -384,7 +385,7 @@ class LorannBase {
 
     /* Create filter attribute index maps for clusters for approximate search */
     for (int i = 0; i < _cluster_map.size(); i++) {
-      attribute_data_map this_cluster_attribute_data_map;
+      // attribute_data_map this_cluster_attribute_data_map;
       std::vector<int> cluster = _cluster_map[i];
       std::vector<Bitset> this_cluster_attribute_bitsets;
       this_cluster_attribute_bitsets.reserve(cluster.size());
@@ -393,7 +394,7 @@ class LorannBase {
         for (int j = 0; j < cluster.size(); ++j) {
           int idx = cluster[j];
           if (_attributes.is_set(idx, attr_idx)) {
-            attribute_bitset.set(idx);
+            attribute_bitset.set(j);
           }
         }
         this_cluster_attribute_bitsets.push_back(attribute_bitset);

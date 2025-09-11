@@ -58,13 +58,32 @@ if __name__ == "__main__":
             "clusters_to_search": 64,
             "points_to_rerank": 2000,
             "k": 10,
+            "filter_attributes": ["one"],
+            "filter_approach": "indexing",
+            "exact_search_approach": "prefilter",
+            "n_repeat_runs": 1,
+            "query_indices": query_indices,
+        },
+        {
+            "clusters_to_search": 64,
+            "points_to_rerank": 2000,
+            "k": 10,
             "filter_attributes": ["one", "two"],
             "filter_approach": "indexing",
             "exact_search_approach": "prefilter",
             "n_repeat_runs": 1,
             "query_indices": query_indices,
         },
-    ]
+        {
+            "clusters_to_search": 64,
+            "points_to_rerank": 2000,
+            "k": 10,
+            "filter_attributes": ["one", "two", "three"],
+            "filter_approach": "indexing",
+            "exact_search_approach": "prefilter",
+            "n_repeat_runs": 1,
+            "query_indices": query_indices,
+        }    ]
     
     
     # experimenter parameters

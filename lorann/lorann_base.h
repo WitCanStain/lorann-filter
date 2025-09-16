@@ -143,14 +143,14 @@ class LorannBase {
   void exact_search(const float *q, int k, int *out, const attribute_set& filter_attributes, std::string filter_approach, float *dist_out = nullptr) const {
     float *data_ptr = _data;
     int n_datapoints;
-    std::vector<int> attribute_data_idxs;
+    std::vector<size_t> attribute_data_idxs;
     if (filter_approach == "indexing") {
       Bitset filtered_datapoints(_n_samples, true);
       for (size_t idx: filter_attributes) {
         std::cout << "filter_attributes idx: " << idx << " ";
         _all_attribute_bitsets[idx].bitwise_and(filtered_datapoints, filtered_datapoints);
       }
-      std::vector<size_t> attribute_data_idxs = filtered_datapoints.get_set_bit_positions();
+      filtered_datapoints.get_set_bit_positions_simd(attribute_data_idxs);
       n_datapoints = attribute_data_idxs.size();
     } else if (filter_approach == "prefilter") {
       auto start_filter = std::chrono::high_resolution_clock::now();

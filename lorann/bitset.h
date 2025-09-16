@@ -36,12 +36,12 @@ public:
 
     size_t size() const { return n_bits; }
 
-    void set(size_t idx) {
+    inline void set(size_t idx) {
         if (idx >= n_bits) throw std::out_of_range("set Bit index " + std::to_string(idx) + " out of range");
         data[idx / BITS_PER_BLOCK] |= (Block(1) << (idx % BITS_PER_BLOCK));
     }
 
-    void clear(size_t idx) {
+    inline void clear(size_t idx) {
         if (idx >= n_bits) throw std::out_of_range("Bit index out of range");
         data[idx / BITS_PER_BLOCK] &= ~(Block(1) << (idx % BITS_PER_BLOCK));
     }
@@ -79,20 +79,52 @@ public:
         }
     }
 
-    std::vector<size_t> get_set_bit_positions() const {
-        std::vector<size_t> positions;
+    inline void get_set_bit_positions(std::vector<size_t> &positions) const {
         positions.reserve(n_bits / 2); // rough guess to avoid reallocs
-
         for (size_t block_idx = 0; block_idx < n_blocks; ++block_idx) {
             uint64_t block = data[block_idx];
             while (block) {
-                uint64_t t = block & -block;              // isolate lowest set bit
                 size_t bit = __builtin_ctzll(block);      // count trailing zeros
                 positions.push_back(block_idx * BITS_PER_BLOCK + bit);
-                block &= block - 1;                        // clear the lowest set bit
+                block &= (block - 1);                        // clear the lowest set bit
             }
         }
-        return positions;
+    }
+
+    inline void get_set_bit_positions_simd(std::vector<size_t> &positions) const {
+        positions.reserve(n_bits / 2); // rough guess
+        size_t base = 0;
+
+        // Process 4 blocks (256 bits) at a time
+        size_t simd_blocks = (n_blocks / 4) * 4;
+        for (size_t i = 0; i < simd_blocks; i += 4) {
+            __m256i v = _mm256_loadu_si256((__m256i*)&data[i]);
+            if (_mm256_testz_si256(v, v)) {
+                base += 256;
+                continue; // all zero, skip entire 256-bit chunk
+            }
+
+            // Fallback to scalar for each of the 4 blocks
+            for (int j = 0; j < 4; ++j) {
+                uint64_t block = data[i + j];
+                while (block) {
+                    int pos = __builtin_ctzll(block);
+                    positions.push_back(base + pos);
+                    block &= (block - 1);
+                }
+                base += BITS_PER_BLOCK;
+            }
+        }
+
+        // Handle remaining blocks (tail)
+        for (size_t i = simd_blocks; i < n_blocks; ++i) {
+            uint64_t block = data[i];
+            while (block) {
+                int pos = __builtin_ctzll(block);
+                positions.push_back(i * BITS_PER_BLOCK + pos);
+                block &= (block - 1);
+            }
+        }
     }
 
     // Clear all bits

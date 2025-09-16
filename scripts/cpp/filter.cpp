@@ -10,22 +10,11 @@
 #include <bitset_matrix.h>
 typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> RowMatrix;
 BitsetMatrix attribute_bitmatrix;
-// const int n_input_vecs = 50000; //999994
-//std::vector<std::string> attribute_strings = {"one", "green", "blue", "yellow", "orange", "purple", "black", "white", "pink", "brown"};
-std::vector<std::string> attribute_strings = {
-        "one", "two", "three", "four", "five",
-        "six", "seven", "eight", "nine", "ten",
-        "eleven", "twelve", "thirteen", "fourteen", "fifteen",
-        "sixteen", "seventeen", "eighteen", "nineteen", "twenty",
-        "twenty-one", "twenty-two", "twenty-three", "twenty-four", "twenty-five",
-        "twenty-six", "twenty-seven", "twenty-eight", "twenty-nine", "thirty"
-};
-const int n_attributes = attribute_strings.size(); // 30
+int _n_attributes;// = attribute_strings.size(); // 30
 std::vector<int> attribute_idxs;
 std::random_device rd; // obtain a random number from hardware
 std::mt19937 gen(42); // seed the generator
-std::uniform_int_distribution<> attribute_selector_distr(0, n_attributes-1); // define the range
-std::uniform_int_distribution<> attribute_count_distr(1, 5); // define the range
+
 
 
 std::vector<int> findUnion(Eigen::VectorXi& a, Eigen::VectorXi& b) {
@@ -38,8 +27,10 @@ std::vector<int> findUnion(Eigen::VectorXi& a, Eigen::VectorXi& b) {
     return result;
 }
 
-RowMatrix* load_vectors(int n_input_vecs=999994) {
-  attribute_bitmatrix.init(n_input_vecs, n_attributes);
+RowMatrix* load_vectors(int n_input_vecs=999994, int n_attributes_per_datapoint=5) {
+  std::uniform_int_distribution<> attribute_selector_distr(0, _n_attributes-1); // define the range
+  std::uniform_int_distribution<> attribute_count_distr(1, n_attributes_per_datapoint); // define the range
+  attribute_bitmatrix.init(n_input_vecs, _n_attributes);
   std::cout << "Using " << n_input_vecs << " input vectors." << std::endl;
   std::ios::sync_with_stdio(false);
   std::ifstream fin("wiki-news-300d-1M.vec");
@@ -63,8 +54,8 @@ RowMatrix* load_vectors(int n_input_vecs=999994) {
     iss >> token;
     int j = 0;
     float value;
-    int n_attributes_for_point = attribute_count_distr(gen);
-    for (int k = 0; k < n_attributes_for_point; ++k) {
+    int _n_attributes_for_point = attribute_count_distr(gen);
+    for (int k = 0; k < _n_attributes_for_point; ++k) {
       int selected_attr_idx = attribute_selector_distr(gen);
       attribute_bitmatrix.set(i, selected_attr_idx);
     }
@@ -99,13 +90,14 @@ Lorann::Lorann<Lorann::SQ4Quantizer>* index_ptr = nullptr;
 RowMatrix* Q_ptr;
 
 extern "C" {
-  bool build_index(int n_attr_partitions, int n_input_vecs, int n_clusters, int global_dim, int rank, int train_size, bool euclidean) {
+  bool build_index(int* filter_attribute_list, int n_attributes, int n_attributes_per_datapoint, int n_attr_partitions, int n_input_vecs, int n_clusters, int global_dim, int rank, int train_size, bool euclidean) {
     std::cout << "Loading data..." << std::endl;
-    RowMatrix* X = load_vectors(n_input_vecs);
+    _n_attributes = n_attributes;
+    RowMatrix* X = load_vectors(n_input_vecs, n_attributes_per_datapoint);
     Q_ptr = X;
     // RowMatrix Q = X.topRows(1000);
     // Q_ptr =  new RowMatrix(X->topRows(100000));
-    for (int i = 0; i < attribute_strings.size(); ++i) {
+    for (int i = 0; i < _n_attributes; ++i) {
       attribute_idxs.push_back(i);
     }
     std::cout << "Building the index..." << std::endl;
@@ -121,17 +113,16 @@ extern "C" {
   /**
    * filter_approach one of "prefilter", "postfilter", "indexing"
    */
-float filter(int q_idx, bool exact_search, int k,  int clusters_to_search, int points_to_rerank, const char* filter_attribute, const char* filter_approach) {
+float filter(int q_idx, bool exact_search, int k,  int clusters_to_search, int points_to_rerank, int filter_attribute, const char* filter_approach) {
   if (index_ptr == nullptr) {
     std::cout << "Index has not been initialised. Aborting..." << std::endl;
     return 0;
   }
   Lorann::Lorann<Lorann::SQ4Quantizer> index = *index_ptr;
   RowMatrix Q = (*Q_ptr).topRows(1000);
-  auto it = std::find(attribute_strings.begin(), attribute_strings.end(), filter_attribute);
-  int filter_idx = it - attribute_strings.begin();
+  int filter_idx = filter_attribute;
   BitsetMatrix filter_attributes;
-  filter_attributes.init(1, n_attributes);
+  filter_attributes.init(1, _n_attributes);
   filter_attributes.set(0, filter_idx);
   Eigen::VectorXi exact_indices(k);
   Eigen::VectorXi approx_indices(k);
@@ -145,7 +136,7 @@ float filter(int q_idx, bool exact_search, int k,  int clusters_to_search, int p
 }
 
 extern "C" {
-  float filter_wrapper(int* idxs, int n_idxs, bool exact_search, int k,  int clusters_to_search, int points_to_rerank, const char* filter_attribute, const char* filter_approach) {
+  float filter_wrapper(int* idxs, int n_idxs, bool exact_search, int k,  int clusters_to_search, int points_to_rerank, int filter_attribute, const char* filter_approach) {
 
     std::vector<float> results(n_idxs);
     std::chrono::microseconds total_duration = (std::chrono::microseconds)0;
@@ -176,26 +167,23 @@ extern "C" {
     int k,
     int clusters_to_search,
     int points_to_rerank,
-    const char** string_filter_attributes,
+    int* int_filter_attributes,
     int n_filter_attributes,
     const char* filter_approach,
     const char* exact_search_approach,
     float* recall,
     int* approx_latency,
-    int* exact_latency) {
+    int* exact_latency,
+    bool verbose) {
     Lorann::Lorann<Lorann::SQ4Quantizer> index = *index_ptr;
     BitsetMatrix filter_attributes;
-    filter_attributes.init(1, n_attributes);
-    // std::cout << "n_filter_attributes: " << n_filter_attributes << std::endl;
+    filter_attributes.init(1, _n_attributes);
     for (int i = 0; i<n_filter_attributes; ++i) {
-      auto it = std::find(attribute_strings.begin(), attribute_strings.end(), string_filter_attributes[i]);
-      int filter_idx = it - attribute_strings.begin();
-      filter_attributes.set(0, filter_idx);
+      filter_attributes.set(0, int_filter_attributes[i]);
     }
-    // for (int i = 0; i < n_attributes; ++i) {
+    // for (int i = 0; i < _n_attributes; ++i) {
     //   std::cout << filter_attributes.is_set(0,i);
     // }
-    std::cout << std::endl;
     std::vector<float> recall_vec(n_idxs);
     std::chrono::microseconds total_exact_duration = (std::chrono::microseconds) 0;
     std::chrono::microseconds total_approx_duration = (std::chrono::microseconds) 0;
@@ -219,7 +207,7 @@ extern "C" {
       Eigen::VectorXi approx_indices(k);
       auto start_approx = std::chrono::high_resolution_clock::now();
       try {
-        index.search((*Q_ptr).row(idxs[i]).data(), k, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_approach, nullptr, false);
+        index.search((*Q_ptr).row(idxs[i]).data(), k, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_approach, nullptr, verbose);
       } catch (const std::runtime_error &e) {
         std::cout << e.what() << std::endl;
         break;
@@ -273,35 +261,19 @@ extern "C" {
     // }
     // std::cout << "]";
     *recall = avg_recall;
-    std::cout << "avg_recall c++: " << avg_recall;
     *approx_latency = avg_approx_duration.count();
     *exact_latency = avg_exact_duration.count();
     return avg_recall;
   }
 }
 
-extern "C" {
-  int filter_proc(int n_attr_partitions, int n_input_vecs, int n_clusters, int global_dim, int rank, int train_size, bool euclidean, int* idxs, int n_idxs, bool exact_search, int k,  int clusters_to_search, int points_to_rerank, const char* filter_attribute, const char* filter_approach) {
-    bool idx_built = build_index(n_attr_partitions, n_input_vecs, n_clusters, global_dim, rank, train_size, euclidean);
-    std::vector<float> results(n_idxs);
-    for ( int i = 0; i < n_idxs; ++i) {
-      results[i] = filter(idxs[i], exact_search, k, clusters_to_search, points_to_rerank, filter_attribute, filter_approach);
-    }
-    float sum = 0;
-    for (size_t i = 0; i < n_idxs; ++i) {
-      sum += results[i];
-    }
-    float avg_recall = sum / n_idxs;
-    std::cout << "average recall: " << avg_recall << std::endl;
-    return 0;
-  }
-}
 
 int main() {
-  bool idx = build_index(10, 100000, 1024, 256, 32, 5, true);
-  for (int i = 4070; i < 4075; i++) {
-    filter(i, true, 10, 64, 2000, "brown", "indexing");
-  }
-  std::cout << "finished." << std::endl;
+
+  // bool idx = build_index(10, 100000, 1024, 256, 32, 5, true);
+  // for (int i = 4070; i < 4075; i++) {
+  //   filter(i, true, 10, 64, 2000, 1, "indexing");
+  // }
+  // std::cout << "finished." << std::endl;
   return 0;
 }

@@ -61,19 +61,19 @@ if __name__ == "__main__":
     dataset_filter_attributes = np.array(dataset_filter_attribute_range, dtype=np.int32)
     n_attributes_per_datapoint = 5
     n_attr_idx_partitions = 10
-    n_input_vecs = 60000 #999994
-    n_clusters = 1024 # 1024 for full set
+    n_input_vecs = 9990000 #999994
+    n_clusters = 3000 # 1024 for full set
     global_dim = 256
     rank = 32
     train_size = 5
     euclidean = True
     
-    query_indices = [random.randint(0, n_input_vecs) for i in range(1)]#[399529, 241926, 958223, 402175, 893348, 9781, 819157, 880067, 460738, 758298, 334374, 270022, 650928, 612145, 125639, 453611, 881900, 226359, 76249, 498268, 131075, 702495, 19438, 129779, 722313, 944585, 279510, 333237, 650012, 190935, 930905, 316057, 418856, 111895, 98062, 695562, 517225, 241595, 22717, 81649, 763585]
+    query_indices = [random.randint(0, n_input_vecs) for i in range(10)]#[399529, 241926, 958223, 402175, 893348, 9781, 819157, 880067, 460738, 758298, 334374, 270022, 650928, 612145, 125639, 453611, 881900, 226359, 76249, 498268, 131075, 702495, 19438, 129779, 722313, 944585, 279510, 333237, 650012, 190935, 930905, 316057, 418856, 111895, 98062, 695562, 517225, 241595, 22717, 81649, 763585]
     #[random.randint(0, n_input_vecs) for i in range(100)]
 
     search_param_sets = [
         {
-            "clusters_to_search": 64,
+            "clusters_to_search": 128,
             "points_to_rerank": 2000,
             "k": 10,
             "filter_attributes": [1],
@@ -83,7 +83,7 @@ if __name__ == "__main__":
             "query_indices": query_indices,
         },
         {
-            "clusters_to_search": 64,
+            "clusters_to_search": 128,
             "points_to_rerank": 2000,
             "k": 10,
             "filter_attributes": [1, 2],
@@ -93,7 +93,7 @@ if __name__ == "__main__":
             "query_indices": query_indices,
         },
         {
-            "clusters_to_search": 64,
+            "clusters_to_search": 128,
             "points_to_rerank": 2000,
             "k": 10,
             "filter_attributes": [1, 2, 3],
@@ -122,7 +122,7 @@ if __name__ == "__main__":
         train_size, 
         euclidean,
         True,
-        ctypes.c_char_p("fashion-mnist-784-euclidean.hdf5".encode('utf-8'))
+        ctypes.c_char_p("deep-image-96-angular.hdf5".encode('utf-8'))
 
     )
     end_time = time.process_time()

@@ -173,3 +173,5 @@ doxygen
 /scripts/experiment_parametriser/index.bin
 /scripts/experiment_parametriser/venv/*
 /figures
+fashion-mnist-784-euclidean.hdf5.1
+deep-image-96-angular.hdf5

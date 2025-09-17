@@ -60,48 +60,77 @@ if __name__ == "__main__":
     dataset_filter_attribute_range = [i for i in range(30)]
     dataset_filter_attributes = np.array(dataset_filter_attribute_range, dtype=np.int32)
     n_attributes_per_datapoint = 5
-    n_attr_idx_partitions = 10
-    n_input_vecs = 60000 #999994
+    n_attr_idx_partitions = 30
+    n_input_vecs = 999994 #999994
     n_clusters = 1024 # 1024 for full set
     global_dim = 256
     rank = 32
     train_size = 5
     euclidean = True
     
-    query_indices = [random.randint(0, n_input_vecs) for i in range(1)]#[399529, 241926, 958223, 402175, 893348, 9781, 819157, 880067, 460738, 758298, 334374, 270022, 650928, 612145, 125639, 453611, 881900, 226359, 76249, 498268, 131075, 702495, 19438, 129779, 722313, 944585, 279510, 333237, 650012, 190935, 930905, 316057, 418856, 111895, 98062, 695562, 517225, 241595, 22717, 81649, 763585]
-    #[random.randint(0, n_input_vecs) for i in range(100)]
+    query_indices = [random.randint(0, n_input_vecs) for i in range(100)]
 
     search_param_sets = [
         {
-            "clusters_to_search": 64,
+            "clusters_to_search": 50,
             "points_to_rerank": 2000,
             "k": 10,
-            "filter_attributes": [1],
+            "filter_attributes": [1,2],
             "filter_approach": "indexing",
             "exact_search_approach": "prefilter",
             "n_repeat_runs": 1,
             "query_indices": query_indices,
         },
         {
-            "clusters_to_search": 64,
+            "clusters_to_search": 100,
             "points_to_rerank": 2000,
             "k": 10,
-            "filter_attributes": [1, 2],
+            "filter_attributes": [1,2],
             "filter_approach": "indexing",
             "exact_search_approach": "prefilter",
             "n_repeat_runs": 1,
             "query_indices": query_indices,
         },
         {
-            "clusters_to_search": 64,
+            "clusters_to_search": 150,
             "points_to_rerank": 2000,
             "k": 10,
-            "filter_attributes": [1, 2, 3],
+            "filter_attributes": [1,2],
             "filter_approach": "indexing",
             "exact_search_approach": "prefilter",
             "n_repeat_runs": 1,
             "query_indices": query_indices,
-        }
+        },
+        {
+            "clusters_to_search": 200,
+            "points_to_rerank": 2000,
+            "k": 10,
+            "filter_attributes": [1,2],
+            "filter_approach": "indexing",
+            "exact_search_approach": "prefilter",
+            "n_repeat_runs": 1,
+            "query_indices": query_indices,
+        },
+        {
+            "clusters_to_search": 300,
+            "points_to_rerank": 2000,
+            "k": 10,
+            "filter_attributes": [1,2],
+            "filter_approach": "indexing",
+            "exact_search_approach": "prefilter",
+            "n_repeat_runs": 1,
+            "query_indices": query_indices,
+        },
+        {
+            "clusters_to_search": 500,
+            "points_to_rerank": 2000,
+            "k": 10,
+            "filter_attributes": [1,2],
+            "filter_approach": "indexing",
+            "exact_search_approach": "prefilter",
+            "n_repeat_runs": 1,
+            "query_indices": query_indices,
+        },
     ]
     
     
@@ -121,8 +150,8 @@ if __name__ == "__main__":
         rank, 
         train_size, 
         euclidean,
-        True,
-        ctypes.c_char_p("fashion-mnist-784-euclidean.hdf5".encode('utf-8'))
+        False,
+        ctypes.c_char_p("wiki-news-300d-1M.vec".encode('utf-8'))
 
     )
     end_time = time.process_time()
@@ -168,7 +197,7 @@ if __name__ == "__main__":
                 ctypes.byref(recall),
                 ctypes.byref(approx_latency),
                 ctypes.byref(exact_latency),
-                True
+                False
             )
             recalls.append(recall.value)
             approx_latencies.append(approx_latency.value)
@@ -191,12 +220,13 @@ if __name__ == "__main__":
     all_approximate_latencies = [o["approx_latency"] for o in outputs]
     all_exact_latencies = [o["exact_latency"] for o in outputs]
 
-    
-
-    plt.plot(all_recalls, all_approximate_latencies)
-    plt.ylabel("Latency")
+    print(all_approximate_latencies)
+    qps = [1/(1e-6*l) for l in all_approximate_latencies]
+    print(qps)
+    plt.plot(all_recalls, qps, label="attr-bitmatrix-wiki-news-300d-1M.vec")
+    plt.ylabel("Queries per Second")
     plt.xlabel("Recall")
-    plt.savefig('../../figures/recall-latency.png')
+    plt.savefig('../../figures/attr-bitmatrix-10partition-12-recall-qps-wiki-news.png')
     # plt.show()
 
 

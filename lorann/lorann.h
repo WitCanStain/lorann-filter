@@ -150,7 +150,7 @@ class Lorann : public LorannBase {
         auto stop_indexing = std::chrono::high_resolution_clock::now();
         auto start_get_bits = std::chrono::high_resolution_clock::now();
         std::vector<size_t> cluster_attribute_data_idxs;
-        filtered_datapoints.get_set_bit_positions(cluster_attribute_data_idxs);
+        filtered_datapoints.get_set_bit_positions_simd(cluster_attribute_data_idxs);
         auto stop_get_bits = std::chrono::high_resolution_clock::now();
         if (cluster_attribute_data_idxs.size() > 0) matching_results_found = true;
         attribute_data_idxs.reserve(cluster_attribute_data_idxs.size());

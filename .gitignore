@@ -172,4 +172,4 @@ doxygen
 /scripts/experiment_parametriser/wiki-news-300d-1M.vec
 /scripts/experiment_parametriser/index.bin
 /scripts/experiment_parametriser/venv/*
-/figures
+fashion-mnist-784-euclidean.hdf5.1

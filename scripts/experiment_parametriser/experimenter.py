@@ -14,7 +14,18 @@ if __name__ == "__main__":
     libname = script_dir.parent / "cpp" / "libfilter.so"
     c_lib = ctypes.CDLL(libname)
     c_lib.build_index.restype = ctypes.c_bool
-    c_lib.build_index.argtypes = ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool
+    c_lib.build_index.argtypes = (
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int, 
+        ctypes.c_int, 
+        ctypes.c_int, 
+        ctypes.c_int, 
+        ctypes.c_int, 
+        ctypes.c_bool,
+        )
     
     # c_lib.filter.restype = ctypes.c_float
     # c_lib.filter.argtypes = ctypes.c_int, ctypes.c_bool, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p
@@ -27,22 +38,27 @@ if __name__ == "__main__":
 
     c_lib.fast_filter_wrapper_profiled.restype = ctypes.c_float
     c_lib.fast_filter_wrapper_profiled.argtypes = (
-        ctypes.POINTER(ctypes.c_int), 
-        ctypes.c_int, 
-        ctypes.c_int, 
-        ctypes.c_int, 
-        ctypes.c_int, 
-        ctypes.POINTER(ctypes.c_char_p), 
-        ctypes.c_int, 
-        ctypes.c_char_p, 
-        ctypes.c_char_p, 
-        ctypes.POINTER(ctypes.c_float), 
-        ctypes.POINTER(ctypes.c_int),
-        ctypes.POINTER(ctypes.c_int))
+        ctypes.POINTER(ctypes.c_int), # idxs
+        ctypes.c_int, # n_idxs
+        ctypes.c_int, # k
+        ctypes.c_int, # cluster_to_search
+        ctypes.c_int, # points_to_rerank
+        ctypes.POINTER(ctypes.c_int), # int_filter_attributes
+        ctypes.c_int, # n_filter_attributes
+        ctypes.c_char_p, # filter_approach
+        ctypes.c_char_p, # exact_search_approach
+        ctypes.POINTER(ctypes.c_float), # recall
+        ctypes.POINTER(ctypes.c_int), # approx_latency
+        ctypes.POINTER(ctypes.c_int), # exact_latency
+        ctypes.c_bool) # verbose
+        
 
 
     # index parameters
-    n_attr_partitions = 10
+    dataset_filter_attribute_range = [i for i in range(200)]
+    dataset_filter_attributes = np.array(dataset_filter_attribute_range, dtype=np.int32)
+    n_attributes_per_datapoint = 50
+    n_attr_idx_partitions = 10
     n_input_vecs = 999994 #999994
     n_clusters = 1024 # 1024 for full set
     global_dim = 256
@@ -50,7 +66,7 @@ if __name__ == "__main__":
     train_size = 5
     euclidean = True
     
-    query_indices = [random.randint(0, n_input_vecs) for i in range(200)]#[399529, 241926, 958223, 402175, 893348, 9781, 819157, 880067, 460738, 758298, 334374, 270022, 650928, 612145, 125639, 453611, 881900, 226359, 76249, 498268, 131075, 702495, 19438, 129779, 722313, 944585, 279510, 333237, 650012, 190935, 930905, 316057, 418856, 111895, 98062, 695562, 517225, 241595, 22717, 81649, 763585]
+    query_indices = [random.randint(0, n_input_vecs) for i in range(100)]#[399529, 241926, 958223, 402175, 893348, 9781, 819157, 880067, 460738, 758298, 334374, 270022, 650928, 612145, 125639, 453611, 881900, 226359, 76249, 498268, 131075, 702495, 19438, 129779, 722313, 944585, 279510, 333237, 650012, 190935, 930905, 316057, 418856, 111895, 98062, 695562, 517225, 241595, 22717, 81649, 763585]
     #[random.randint(0, n_input_vecs) for i in range(100)]
 
     search_param_sets = [
@@ -58,12 +74,32 @@ if __name__ == "__main__":
             "clusters_to_search": 64,
             "points_to_rerank": 2000,
             "k": 10,
-            "filter_attributes": ["one", "two"],
+            "filter_attributes": [1],
             "filter_approach": "indexing",
             "exact_search_approach": "prefilter",
             "n_repeat_runs": 1,
             "query_indices": query_indices,
         },
+        {
+            "clusters_to_search": 64,
+            "points_to_rerank": 2000,
+            "k": 10,
+            "filter_attributes": [1, 2],
+            "filter_approach": "indexing",
+            "exact_search_approach": "prefilter",
+            "n_repeat_runs": 1,
+            "query_indices": query_indices,
+        },
+        {
+            "clusters_to_search": 128,
+            "points_to_rerank": 2000,
+            "k": 10,
+            "filter_attributes": [1, 2, 3],
+            "filter_approach": "indexing",
+            "exact_search_approach": "prefilter",
+            "n_repeat_runs": 1,
+            "query_indices": query_indices,
+        }
     ]
     
     
@@ -73,7 +109,10 @@ if __name__ == "__main__":
     # building the index
     start_time = time.process_time()
     index_res = c_lib.build_index(
-        n_attr_partitions, 
+        dataset_filter_attributes.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
+        len(dataset_filter_attributes),
+        n_attr_idx_partitions,
+        n_attributes_per_datapoint,
         n_input_vecs, 
         n_clusters, 
         global_dim, 
@@ -86,19 +125,20 @@ if __name__ == "__main__":
     print("Time taken to build index: ", elapsed_time)
     outputs = []
 
-    print(f"Index parameters:\nn_attr_partitions = {n_attr_partitions}\nn_input_vecs = {n_input_vecs}\nn_clusters = {n_clusters}\nglobal_dim = {global_dim}\nrank = {rank}\ntrain_size = {train_size}\neuclidean = {euclidean}\n\n")
+    print(f"Index parameters:\nn_attr_idx_partitions = {n_attr_idx_partitions}\nn_input_vecs = {n_input_vecs}\nn_clusters = {n_clusters}\nglobal_dim = {global_dim}\nrank = {rank}\ntrain_size = {train_size}\neuclidean = {euclidean}\n\n")
     for param_set in search_param_sets:
         print(f"Using {n_input_vecs} inputs and {param_set["filter_approach"]} filter method and {param_set["exact_search_approach"]} exact search approach.")
         print(f"Running experimenter with search parameters:\n\
     clusters_to_search = {param_set["clusters_to_search"]}\npoints_to_rerank = {param_set["points_to_rerank"]}\nk = {param_set["k"]}\nfilter_attribute = {param_set["filter_attributes"]}\nfilter_approach = {param_set["filter_approach"]}\nexact_search_approach = {param_set["exact_search_approach"]}\n\n\
     experiment parameters:\nn_repeat_runs = {param_set["n_repeat_runs"]}\nn_query_indices = {len(param_set["query_indices"])}\n") #\nquery_indices = {param_set["query_indices"]}
 
-        filter_attributes_b = [s.encode("utf-8") for s in param_set["filter_attributes"]]
-        FilterArrayType = ctypes.c_char_p * len(filter_attributes_b)
-        filter_attributes_c = FilterArrayType(*filter_attributes_b)
+        # filter_attributes_b = [s.encode("utf-8") for s in param_set["filter_attributes"]]
+        # FilterArrayType = ctypes.c_char_p * len(filter_attributes_b)
+        # filter_attributes_c = FilterArrayType(*filter_attributes_b)
         filter_approach_b_string = param_set["filter_approach"].encode('utf-8')
         exact_search_approach_b_string = param_set["exact_search_approach"].encode('utf-8')
-        arr = np.array(param_set["query_indices"], dtype=np.int32)
+        query_index_arr = np.array(param_set["query_indices"], dtype=np.int32)
+        filter_attributes_arr = np.array(param_set["filter_attributes"], dtype=np.int32)
 
         # run the experiment
         
@@ -111,23 +151,23 @@ if __name__ == "__main__":
             approx_latency = ctypes.c_int(0)
             exact_latency = ctypes.c_int(0)
             c_lib.fast_filter_wrapper_profiled(
-                arr.ctypes.data_as(ctypes.POINTER(ctypes.c_int)), 
-                len(arr),
+                query_index_arr.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
+                len(query_index_arr),
                 param_set["k"],
                 param_set["clusters_to_search"],
                 param_set["points_to_rerank"],
-                filter_attributes_c,
-                len(param_set["filter_attributes"]),
+                filter_attributes_arr.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
+                len(filter_attributes_arr),
                 ctypes.c_char_p(filter_approach_b_string),
                 ctypes.c_char_p(exact_search_approach_b_string),
                 ctypes.byref(recall),
                 ctypes.byref(approx_latency),
-                ctypes.byref(exact_latency)
+                ctypes.byref(exact_latency),
+                False
             )
             recalls.append(recall.value)
             approx_latencies.append(approx_latency.value)
             exact_latencies.append(exact_latency.value)
-        print(recalls)
         end_time = time.process_time()
         elapsed_time = end_time - start_time
         total_approx_latency = sum(approx_latencies)

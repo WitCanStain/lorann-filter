@@ -58,7 +58,7 @@ if __name__ == "__main__":
     dataset_filter_attribute_range = [i for i in range(200)]
     dataset_filter_attributes = np.array(dataset_filter_attribute_range, dtype=np.int32)
     n_attributes_per_datapoint = 50
-    n_attr_partitions = 200
+    n_attr_idx_partitions = 200
     n_input_vecs = 999994 #999994
     n_clusters = 1024 # 1024 for full set
     global_dim = 256
@@ -111,7 +111,7 @@ if __name__ == "__main__":
     index_res = c_lib.build_index(
         dataset_filter_attributes.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
         len(dataset_filter_attributes),
-        n_attr_partitions,
+        n_attr_idx_partitions,
         n_attributes_per_datapoint,
         n_input_vecs, 
         n_clusters, 
@@ -125,7 +125,7 @@ if __name__ == "__main__":
     print("Time taken to build index: ", elapsed_time)
     outputs = []
 
-    print(f"Index parameters:\nn_attr_partitions = {n_attr_partitions}\nn_input_vecs = {n_input_vecs}\nn_clusters = {n_clusters}\nglobal_dim = {global_dim}\nrank = {rank}\ntrain_size = {train_size}\neuclidean = {euclidean}\n\n")
+    print(f"Index parameters:\nn_attr_idx_partitions = {n_attr_idx_partitions}\nn_input_vecs = {n_input_vecs}\nn_clusters = {n_clusters}\nglobal_dim = {global_dim}\nrank = {rank}\ntrain_size = {train_size}\neuclidean = {euclidean}\n\n")
     for param_set in search_param_sets:
         print(f"Using {n_input_vecs} inputs and {param_set["filter_approach"]} filter method and {param_set["exact_search_approach"]} exact search approach.")
         print(f"Running experimenter with search parameters:\n\

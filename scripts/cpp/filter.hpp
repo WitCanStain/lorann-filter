@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-EXPORT_SYMBOL int build_index(int n_attr_partitions, int n_clusters, int global_dim, int rank, int train_size, bool euclidean);
+EXPORT_SYMBOL int build_index(int n_attr_partitions, int n_clusters, int global_dim, int rank, int train_size, bool euclidean, bool use_hdf5, char* dataset_file_path);
 
 EXPORT_SYMBOL float filter(int q_idx, bool exact_search, int k,  int clusters_to_search, int points_to_rerank, std::string filter_attribute, std::string filter_approach);
 

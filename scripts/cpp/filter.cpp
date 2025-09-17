@@ -8,6 +8,7 @@
 #include <vector>
 #include <chrono>
 #include <bitset_matrix.h>
+#include <H5Cpp.h>
 typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> RowMatrix;
 BitsetMatrix attribute_bitmatrix;
 int _n_attributes;// = attribute_strings.size(); // 30
@@ -27,56 +28,164 @@ std::vector<int> findUnion(Eigen::VectorXi& a, Eigen::VectorXi& b) {
     return result;
 }
 
-RowMatrix* load_vectors(int n_input_vecs=999994, int n_attributes_per_datapoint=5) {
-  std::uniform_int_distribution<> attribute_selector_distr(0, _n_attributes-1); // define the range
-  std::uniform_int_distribution<> attribute_count_distr(1, n_attributes_per_datapoint); // define the range
-  attribute_bitmatrix.init(n_input_vecs, _n_attributes);
-  std::cout << "Using " << n_input_vecs << " input vectors." << std::endl;
-  std::ios::sync_with_stdio(false);
-  std::ifstream fin("wiki-news-300d-1M.vec");
-  if (!fin.is_open()) {
-    throw std::runtime_error(
-        "Could not open wiki-news-300d-1M.vec. Run `make prepare-data` first.");
-  }
-  std::string line;
-  std::getline(fin, line);
-  std::istringstream header(line);
-  int n, d;
-  header >> n >> d;
 
-  RowMatrix* ret_ptr = new RowMatrix(n_input_vecs, 300);
+RowMatrix* load_vectors(
+    int n_input_vecs,
+    int n_attributes_per_datapoint,
+    bool use_hdf5,
+    const std::string& file_path)
+{
+    std::uniform_int_distribution<> attribute_selector_distr(0, _n_attributes - 1);
+    std::uniform_int_distribution<> attribute_count_distr(1, n_attributes_per_datapoint);
 
-  int i = 0;
-  // int n_this_attribute_points = 0;
-  while (std::getline(fin, line) && i < n_input_vecs) {
-    std::istringstream iss(line);
-    std::string token;
-    iss >> token;
-    int j = 0;
-    float value;
-    int _n_attributes_for_point = attribute_count_distr(gen);
-    for (int k = 0; k < _n_attributes_for_point; ++k) {
-      int selected_attr_idx = attribute_selector_distr(gen);
-      attribute_bitmatrix.set(i, selected_attr_idx);
+    attribute_bitmatrix.init(n_input_vecs, _n_attributes);
+    std::cout << "Using " << n_input_vecs << " input vectors." << std::endl;
+
+    RowMatrix* ret_ptr = nullptr;
+
+    if (use_hdf5) {
+        // ==============================
+        // HDF5 READER
+        // ==============================
+        try {
+            H5::H5File file(file_path, H5F_ACC_RDONLY);
+            H5::DataSet dataset = file.openDataSet("train");
+            H5::DataSpace dataspace = dataset.getSpace();
+
+            hsize_t dims[2];
+            dataspace.getSimpleExtentDims(dims, nullptr);
+            int n = dims[0];
+            int d = dims[1];
+
+            std::cout << "hdf5 n: " << n << " hdf5 d: " << d << std::endl;
+
+            if (n_input_vecs > n) {
+                throw std::runtime_error("Requested more vectors than available in HDF5 dataset");
+            }
+
+            std::vector<float> buffer(n_input_vecs * d);
+            dataset.read(buffer.data(), H5::PredType::NATIVE_FLOAT);
+
+            ret_ptr = new RowMatrix(n_input_vecs, d);
+
+            for (int i = 0; i < n_input_vecs; ++i) {
+                int _n_attributes_for_point = attribute_count_distr(gen);
+                for (int k = 0; k < _n_attributes_for_point; ++k) {
+                    int selected_attr_idx = attribute_selector_distr(gen);
+                    attribute_bitmatrix.set(i, selected_attr_idx);
+                }
+                for (int j = 0; j < d; ++j) {
+                    (*ret_ptr)(i, j) = buffer[i * d + j];
+                }
+            }
+
+            std::cout << "Loaded vectors from HDF5 file." << std::endl;
+
+        } catch (H5::FileIException& e) {
+            throw std::runtime_error("Failed to open HDF5 file: " + file_path);
+        } catch (H5::DataSetIException& e) {
+            throw std::runtime_error("Failed to read dataset from HDF5 file: " + file_path);
+        }
+
+    } else {
+        // ==============================
+        // .VEC TEXT READER
+        // ==============================
+        std::ios::sync_with_stdio(false);
+        std::ifstream fin(file_path);
+        if (!fin.is_open()) {
+            throw std::runtime_error("Could not open vec file: " + file_path);
+        }
+
+        std::string line;
+        std::getline(fin, line); // first line is header
+        std::istringstream header(line);
+        int n, d;
+        header >> n >> d;
+
+        ret_ptr = new RowMatrix(n_input_vecs, d);
+
+        int i = 0;
+        while (std::getline(fin, line) && i < n_input_vecs) {
+            std::istringstream iss(line);
+            std::string token;
+            iss >> token; // discard word/token
+
+            float value;
+            int j = 0;
+
+            int _n_attributes_for_point = attribute_count_distr(gen);
+            for (int k = 0; k < _n_attributes_for_point; ++k) {
+                int selected_attr_idx = attribute_selector_distr(gen);
+                attribute_bitmatrix.set(i, selected_attr_idx);
+            }
+
+            while (iss >> value) {
+                (*ret_ptr)(i, j) = value;
+                ++j;
+            }
+            ++i;
+        }
+
+        std::cout << "Loaded vectors from .vec text file." << std::endl;
     }
-    while (iss >> value) {
-      (*ret_ptr)(i, j) = value;
-      ++j;
-    }
-    ++i;
-  }
-  std::cout << "Loading data complete." << std::endl;
-  return ret_ptr;
+
+    return ret_ptr;
 }
+
+
+// RowMatrix* load_vectors(int n_input_vecs=999994, int n_attributes_per_datapoint=5) {
+//   std::uniform_int_distribution<> attribute_selector_distr(0, _n_attributes-1); // define the range
+//   std::uniform_int_distribution<> attribute_count_distr(1, n_attributes_per_datapoint); // define the range
+//   attribute_bitmatrix.init(n_input_vecs, _n_attributes);
+//   std::cout << "Using " << n_input_vecs << " input vectors." << std::endl;
+//   std::ios::sync_with_stdio(false);
+//   std::ifstream fin("wiki-news-300d-1M.vec");
+//   if (!fin.is_open()) {
+//     throw std::runtime_error(
+//         "Could not open wiki-news-300d-1M.vec. Run `make prepare-data` first.");
+//   }
+//   std::string line;
+//   std::getline(fin, line);
+//   std::istringstream header(line);
+//   int n, d;
+//   header >> n >> d;
+
+//   RowMatrix* ret_ptr = new RowMatrix(n_input_vecs, 300);
+
+//   int i = 0;
+//   // int n_this_attribute_points = 0;
+//   while (std::getline(fin, line) && i < n_input_vecs) {
+//     std::istringstream iss(line);
+//     std::string token;
+//     iss >> token;
+//     int j = 0;
+//     float value;
+//     int _n_attributes_for_point = attribute_count_distr(gen);
+//     for (int k = 0; k < _n_attributes_for_point; ++k) {
+//       int selected_attr_idx = attribute_selector_distr(gen);
+//       attribute_bitmatrix.set(i, selected_attr_idx);
+//     }
+//     while (iss >> value) {
+//       (*ret_ptr)(i, j) = value;
+//       ++j;
+//     }
+//     ++i;
+//   }
+//   std::cout << "Loading data complete." << std::endl;
+//   return ret_ptr;
+// }
 
 Lorann::Lorann<Lorann::SQ4Quantizer>* index_ptr = nullptr;
 RowMatrix* Q_ptr;
 
 extern "C" {
-  bool build_index(int* filter_attribute_list, int n_attributes, int n_attributes_per_datapoint, int n_attr_idx_partitions, int n_input_vecs, int n_clusters, int global_dim, int rank, int train_size, bool euclidean) {
+  bool build_index(int* filter_attribute_list, int n_attributes, int n_attributes_per_datapoint, int n_attr_idx_partitions, int n_input_vecs, int n_clusters, int global_dim, int rank, int train_size, bool euclidean, bool use_hdf5, char* dataset_file_path) {
     std::cout << "Loading data..." << std::endl;
+    std::cout << "use_hdf5: " << use_hdf5 << std::endl;
+    std::cout << "dataset_file_path: " << dataset_file_path << std::endl;
     _n_attributes = n_attributes;
-    RowMatrix* X = load_vectors(n_input_vecs, n_attributes_per_datapoint);
+    RowMatrix* X = load_vectors(n_input_vecs, n_attributes_per_datapoint, use_hdf5, dataset_file_path);
     Q_ptr = X;
     // RowMatrix Q = X.topRows(1000);
     // Q_ptr =  new RowMatrix(X->topRows(100000));

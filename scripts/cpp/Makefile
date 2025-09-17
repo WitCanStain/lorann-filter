@@ -15,7 +15,7 @@ example:
 filterdb:
 	$(CXX) -std=c++17 -march=native -fopenmp -DNDEBUG -I../../lorann -flax-vector-conversions filter.cpp -o filterdb -lgomp -g
 filter:
-	$(CXX) -std=c++17 -O3 -march=native -fopenmp -DNDEBUG -I../../lorann -flax-vector-conversions filter.cpp -o libfilter.so -lgomp -fPIC -shared
+	$(CXX) -std=c++17 -O3 -march=native -fopenmp -DNDEBUG -I../../lorann -flax-vector-conversions filter.cpp -o libfilter.so -lgomp -fPIC -shared -lhdf5_cpp -lhdf5
 	
 
 clean:

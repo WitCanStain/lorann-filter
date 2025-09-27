@@ -61,8 +61,8 @@ if __name__ == "__main__":
     dataset_filter_attributes = np.array(dataset_filter_attribute_range, dtype=np.int32)
     n_attributes_per_datapoint = 5
     n_attr_idx_partitions = 10
-    n_input_vecs = 9990000 #999994
-    n_clusters = 3000 # 1024 for full set
+    n_input_vecs = 999994 #999994
+    n_clusters = 1024 # 1024 for full set
     global_dim = 256
     rank = 32
     train_size = 5
@@ -121,8 +121,8 @@ if __name__ == "__main__":
         rank, 
         train_size, 
         euclidean,
-        True,
-        ctypes.c_char_p("deep-image-96-angular.hdf5".encode('utf-8'))
+        False,
+        ctypes.c_char_p("wiki-news-300d-1M.vec".encode('utf-8'))
 
     )
     end_time = time.process_time()
@@ -168,7 +168,7 @@ if __name__ == "__main__":
                 ctypes.byref(recall),
                 ctypes.byref(approx_latency),
                 ctypes.byref(exact_latency),
-                True
+                False
             )
             recalls.append(recall.value)
             approx_latencies.append(approx_latency.value)

@@ -32,11 +32,13 @@ std::vector<int> findUnion(Eigen::VectorXi& a, Eigen::VectorXi& b) {
 RowMatrix* load_vectors(
     int n_input_vecs,
     int n_attributes_per_datapoint,
+    float selectivity,
     bool use_hdf5,
     const std::string& file_path)
 {
-    std::uniform_int_distribution<> attribute_selector_distr(0, _n_attributes - 1);
+    std::uniform_int_distribution<> attribute_selector_distr(1, _n_attributes - 1);
     std::uniform_int_distribution<> attribute_count_distr(1, n_attributes_per_datapoint);
+    std::uniform_real_distribution<> selectivity_distr(0.0, 1.0);
 
     attribute_bitmatrix.init(n_input_vecs, _n_attributes);
     std::cout << "Using " << n_input_vecs << " input vectors." << std::endl;
@@ -70,7 +72,9 @@ RowMatrix* load_vectors(
 
             for (int i = 0; i < n_input_vecs; ++i) {
                 int _n_attributes_for_point = attribute_count_distr(gen);
-                for (int k = 0; k < _n_attributes_for_point; ++k) {
+                bool selectivity_criterion_fulfilled = selectivity_distr(gen) < selectivity;
+                if (selectivity_criterion_fulfilled) attribute_bitmatrix.set(i, 0);
+                for (int k = 1; k < _n_attributes_for_point; ++k) {
                     int selected_attr_idx = attribute_selector_distr(gen);
                     attribute_bitmatrix.set(i, selected_attr_idx);
                 }
@@ -115,7 +119,9 @@ RowMatrix* load_vectors(
             int j = 0;
 
             int _n_attributes_for_point = attribute_count_distr(gen);
-            for (int k = 0; k < _n_attributes_for_point; ++k) {
+            bool selectivity_criterion_fulfilled = selectivity_distr(gen) < selectivity;
+            if (selectivity_criterion_fulfilled) attribute_bitmatrix.set(i, 0);
+            for (int k = 1; k < _n_attributes_for_point; ++k) {
                 int selected_attr_idx = attribute_selector_distr(gen);
                 attribute_bitmatrix.set(i, selected_attr_idx);
             }
@@ -180,12 +186,17 @@ Lorann::Lorann<Lorann::SQ4Quantizer>* index_ptr = nullptr;
 RowMatrix* Q_ptr;
 
 extern "C" {
-  bool build_index(int* filter_attribute_list, int n_attributes, int n_attributes_per_datapoint, int n_attr_idx_partitions, int n_input_vecs, int n_clusters, int global_dim, int rank, int train_size, bool euclidean, bool use_hdf5, char* dataset_file_path) {
+  bool build_index(int* filter_attribute_list, int n_attributes, int n_attributes_per_datapoint, int n_attr_idx_partitions, float selectivity, int n_input_vecs, int n_clusters, int global_dim, int rank, int train_size, bool euclidean, bool use_hdf5, char* dataset_file_path) {
     std::cout << "Loading data..." << std::endl;
     std::cout << "use_hdf5: " << use_hdf5 << std::endl;
     std::cout << "dataset_file_path: " << dataset_file_path << std::endl;
     _n_attributes = n_attributes;
-    RowMatrix* X = load_vectors(n_input_vecs, n_attributes_per_datapoint, use_hdf5, dataset_file_path);
+    RowMatrix* X = load_vectors(n_input_vecs, n_attributes_per_datapoint, selectivity, use_hdf5, dataset_file_path);
+    // size_t n_selectivity = 0;
+    // for (int i = 0; i < n_input_vecs; ++i) {
+    //   if (attribute_bitmatrix.is_set(i, 0)) ++n_selectivity;
+    // }
+    // std::cout << "Selectivity actual: " << (double)n_selectivity / n_input_vecs << std::endl;
     Q_ptr = X;
     // RowMatrix Q = X.topRows(1000);
     // Q_ptr =  new RowMatrix(X->topRows(100000));

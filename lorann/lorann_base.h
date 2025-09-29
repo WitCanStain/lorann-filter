@@ -431,6 +431,7 @@ class LorannBase {
     /* Create filter attribute index maps for clusters for approximate search */
     for (int i = 0; i < _cluster_map.size(); i++) {
       attribute_data_map this_cluster_attribute_data_map;
+      attribute_data_map this_cluster_reverse_index_map;
       
       std::vector<int> cluster = _cluster_map[i];
       // std::cout << "Clustering cluster " << i << " with size " << cluster.size() << std::endl;
@@ -438,11 +439,13 @@ class LorannBase {
         std::vector<int> attribute_data_idx_vec; // vector of indexes of datapoints that have at least one of the attributes in attribute_subvec_set
         attribute_data_idx_vec.reserve(cluster.size());
         int non_applicable_points = 0;
+        std::vector<int> this_cluster_reverse_index;
         for (int i = 0; i<cluster.size(); i++) {
           int idx = cluster[i];
           bool any_match = _attributes.any_match(idx, attr_bitset);
           if (any_match) {
             attribute_data_idx_vec.push_back(idx);
+            this_cluster_reverse_index.push_back(i);
           } else {
             non_applicable_points++;
           }
@@ -456,8 +459,10 @@ class LorannBase {
           // }
         }
         this_cluster_attribute_data_map.insert({attr_bitset.key(0), attribute_data_idx_vec});
+        this_cluster_reverse_index_map.insert({attr_bitset.key(0), this_cluster_reverse_index});
       }
       _cluster_attribute_data_maps.push_back(this_cluster_attribute_data_map); // add cluster attribute data map to vector of all cluster attribute data maps
+      _cluster_reverse_index_maps.push_back(this_cluster_reverse_index_map);
     }
 
     int n_total_index_size = 0;
@@ -551,7 +556,8 @@ class LorannBase {
   mutable attribute_data_map _attribute_data_map;
   mutable std::unordered_map<int, attribute_set> _attribute_index_map;
   mutable std::vector<attribute_data_map> _cluster_attribute_data_maps;
-
+  mutable std::vector<attribute_data_map> _cluster_reverse_index_maps;
+  
   /* vector of points assigned to a cluster, for each cluster */
   std::vector<std::vector<int>> _cluster_map;
 

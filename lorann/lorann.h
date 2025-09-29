@@ -104,11 +104,9 @@ class Lorann : public LorannBase {
     const float compensation = quantized_query.cast<float>().sum();
     const float compensation_data = compensation * quant_data.compensation_factor;
     const float compensation_query = compensation * quant_query.compensation_factor;
-
     std::vector<int> I(clusters_to_search);
     select_nearest_clusters(quantized_query, quantization_factor, principal_axis,
                             compensation_query, clusters_to_search, I.data());
-
     const int total_pts = _cluster_sizes(I).sum();
     
     ColVector all_distances(total_pts);
@@ -116,7 +114,6 @@ class Lorann : public LorannBase {
     ColVector tmp(_max_rank);
 
     int current_cumulative_size = 0;
-    // int current_cumulative_cluster_size = 0;
     bool use_attr_indexing = (filter_approach == "indexing" || filter_approach == "prefilter");
     int total_smallest_idx_sizes = 0; // temporary, remove
     bool matching_results_found = false;
@@ -135,12 +132,13 @@ class Lorann : public LorannBase {
       const int sz = _cluster_sizes[cluster];
       if (sz == 0) continue;
       cumulative_cluster_size += sz;
-      // std::cout << "sz: " << sz << std::endl;
+      
       std::vector<int> attribute_data_idxs;
       std::vector<int> cluster_attribute_data_idxs;
       if (filter_approach == "indexing") {
         auto start_preloop = std::chrono::high_resolution_clock::now();
         attribute_data_map& this_cluster_attribute_data_map = _cluster_attribute_data_maps[cluster];
+        attribute_data_map& this_cluster_reverse_index_map = _cluster_reverse_index_maps[cluster];
         attribute_set smallest_idx;
         smallest_idx.init(1, _n_attributes);
         int smallest_idx_size = _n_samples;
@@ -155,6 +153,8 @@ class Lorann : public LorannBase {
           }
         }
         std::vector<int>& attribute_idx = this_cluster_attribute_data_map[smallest_idx.key(0)];
+        std::vector<int>& reverse_index = this_cluster_reverse_index_map[smallest_idx.key(0)];
+        
         attribute_data_idxs.reserve(attribute_idx.size());
         cluster_attribute_data_idxs.reserve(attribute_idx.size());
         total_smallest_idx_sizes += attribute_idx.size();
@@ -164,23 +164,26 @@ class Lorann : public LorannBase {
           bool filters_match = _attributes.matches(attribute_idx[i], filter_attributes);
           if (filters_match) {
             attribute_data_idxs.push_back(attribute_idx[i]);
-            cluster_attribute_data_idxs.push_back(i);
+            cluster_attribute_data_idxs.push_back(reverse_index[i]);
             matching_results_found = true;
           }
         }
+        // attribute_idx < sz so the indices for intra-cluster points will be off. b_filter expects indexes for the cluster, whereas it is getting indexes for a sub-cluster.
+        // Need a REVERSE INDEX - mapping points of attribute_idx to the cluster point indices.
         auto stop_indexing = std::chrono::high_resolution_clock::now();
         auto duration_indexing = std::chrono::duration_cast<std::chrono::nanoseconds>(stop_indexing - start_indexing);
         total_filter_duration += duration_indexing;
         
         auto duration_preloop = std::chrono::duration_cast<std::chrono::microseconds>(stop_preloop - start_preloop);
         total_filter_preloop_duration += duration_preloop;
-        
       } else if (filter_approach == "prefilter") {
         auto start_prefilter = std::chrono::high_resolution_clock::now();
+        cluster_attribute_data_idxs.reserve(sz);
         for (int i = 0; i < sz; i++) {
           bool filters_match = _attributes.matches(_cluster_map[cluster][i], filter_attributes);
           if (filters_match) {
             attribute_data_idxs.push_back(_cluster_map[cluster][i]);
+            cluster_attribute_data_idxs.push_back(i);
             matching_results_found = true;
           }
         }
@@ -189,7 +192,9 @@ class Lorann : public LorannBase {
         total_prefilter_duration += duration_prefilter;
       }
       int n_filtered_cluster_datapoints = attribute_data_idxs.size();
+      // std::cout << filter_approach << " n_filtered_cluster_datapoints: " << n_filtered_cluster_datapoints << std::endl;
       cumulative_found_points += n_filtered_cluster_datapoints;
+      // std::cout << filter_approach << " cumulative_found_points: " << cumulative_found_points << std::endl;
       if (( filter_approach != "postfilter" && n_filtered_cluster_datapoints == 0)) continue;
       const ColMatrixUInt8 &A = _A[cluster];
       const ColMatrixUInt8 &B = _B[cluster];
@@ -205,12 +210,12 @@ class Lorann : public LorannBase {
                                                         quantized_query_doubled.data());
       const float compensation_tmp =
           quantized_query_doubled.cast<float>().sum() * quant_data.compensation_factor;
-      /* compute r = s^T B */
       auto start_matvec = std::chrono::high_resolution_clock::now();
-      if (filter_approach == "prefilter" || filter_approach == "indexing") {
+      /* compute r = s^T B */
+      if (use_attr_indexing) {
         quant_data.quantized_matvec_product_B_filter(B, quantized_query_doubled, &cluster_attribute_data_idxs, B_correction, tmpfact,
                                                     principal_axis_tmp, compensation_tmp,
-                                                    &all_distances[current_cumulative_size], verbose && (i == 0));
+                                                    &all_distances[current_cumulative_size], verbose);
       } else {
         quant_data.quantized_matvec_product_B(B, quantized_query_doubled, B_correction, tmpfact,
                                                     principal_axis_tmp, compensation_tmp,
@@ -230,6 +235,12 @@ class Lorann : public LorannBase {
         current_cumulative_size += sz;
       }
     }
+    // std::cout << filter_approach << " all_distances: " << std::endl;
+    // for (auto& i: all_distances) {
+    //   std::cout << i << " ";
+    // }
+    // std::cout << std::endl;
+    // std::cout << all_distances.transpose() << std::endl;
     auto stop_clusters = std::chrono::high_resolution_clock::now();
     auto duration_clusters = std::chrono::duration_cast<std::chrono::microseconds>(stop_clusters - start_clusters);
     auto duration_prework = std::chrono::duration_cast<std::chrono::microseconds>(stop_prework - start_prework);

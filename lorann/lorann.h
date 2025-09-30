@@ -235,12 +235,6 @@ class Lorann : public LorannBase {
         current_cumulative_size += sz;
       }
     }
-    // std::cout << filter_approach << " all_distances: " << std::endl;
-    // for (auto& i: all_distances) {
-    //   std::cout << i << " ";
-    // }
-    // std::cout << std::endl;
-    // std::cout << all_distances.transpose() << std::endl;
     auto stop_clusters = std::chrono::high_resolution_clock::now();
     auto duration_clusters = std::chrono::duration_cast<std::chrono::microseconds>(stop_clusters - start_clusters);
     auto duration_prework = std::chrono::duration_cast<std::chrono::microseconds>(stop_prework - start_prework);

@@ -70,7 +70,7 @@ if __name__ == "__main__":
         
 
     dataset_filter_attribute_range = [i for i in range(30)]
-    n_input_vecs = 100000 #999994
+    n_input_vecs = 999994 #999994
     index_param_sets = [
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
@@ -82,19 +82,6 @@ if __name__ == "__main__":
         # "rank": 32,
         # "train_size": 5,
         # "a0_selectivity": 0.01, # ratio of points with attribute 0,
-        # "euclidean": True,
-        # "dataset_file": "wiki-news-300d-1M.vec",
-        # },
-        # {
-        # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-        # "n_attributes_per_datapoint": 10,
-        # "n_attr_idx_partitions": 30,
-        # "n_input_vecs": n_input_vecs, #999994
-        # "n_clusters": 1024, # 1024 for full set,
-        # "global_dim": 256,
-        # "rank": 32,
-        # "train_size": 5,
-        # "a0_selectivity": 0.5, # ratio of points with attribute 0,
         # "euclidean": True,
         # "dataset_file": "wiki-news-300d-1M.vec",
         # },
@@ -111,6 +98,19 @@ if __name__ == "__main__":
         "euclidean": True,
         "dataset_file": "wiki-news-300d-1M.vec",
         },
+        # {
+        # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
+        # "n_attributes_per_datapoint": 10,
+        # "n_attr_idx_partitions": 30,
+        # "n_input_vecs": n_input_vecs, #999994
+        # "n_clusters": 1024, # 1024 for full set,
+        # "global_dim": 256,
+        # "rank": 32,
+        # "train_size": 5,
+        # "a0_selectivity": 0.99, # ratio of points with attribute 0,
+        # "euclidean": True,
+        # "dataset_file": "wiki-news-300d-1M.vec",
+        # },
     ]
     
     query_indices = [random.randint(0, n_input_vecs) for i in range(100)]#[399529, 241926, 958223, 402175, 893348, 9781, 819157, 880067, 460738, 758298, 334374, 270022, 650928, 612145, 125639, 453611, 881900, 226359, 76249, 498268, 131075, 702495, 19438, 129779, 722313, 944585, 279510, 333237, 650012, 190935, 930905, 316057, 418856, 111895, 98062, 695562, 517225, 241595, 22717, 81649, 763585]
@@ -151,71 +151,170 @@ if __name__ == "__main__":
             "label": "prefilter"
         },
         {
-            "clusters_to_search": 10,
+            "clusters_to_search": 300,
             "points_to_rerank": 2000,
             "k": 10,
             "filter_attributes": [0],
-            "filter_approach": "indexing",
+            "filter_approach": "prefilter",
             "exact_search_approach": "prefilter",
             "n_repeat_runs": 1,
             "query_indices": query_indices,
-            "filter_approach": "indexing",
+            "label": "prefilter"
         },
         {
-            "clusters_to_search": 100,
+            "clusters_to_search": 400,
             "points_to_rerank": 2000,
             "k": 10,
             "filter_attributes": [0],
-            "filter_approach": "indexing",
+            "filter_approach": "prefilter",
             "exact_search_approach": "prefilter",
             "n_repeat_runs": 1,
             "query_indices": query_indices,
-            "filter_approach": "indexing",
+            "label": "prefilter"
         },
         {
-            "clusters_to_search": 200,
+            "clusters_to_search": 500,
             "points_to_rerank": 2000,
             "k": 10,
             "filter_attributes": [0],
-            "filter_approach": "indexing",
+            "filter_approach": "prefilter",
             "exact_search_approach": "prefilter",
             "n_repeat_runs": 1,
             "query_indices": query_indices,
-            "filter_approach": "indexing",
+            "label": "prefilter"
         },
-        {
-            "clusters_to_search": 10,
-            "points_to_rerank": 2000,
-            "k": 10,
-            "filter_attributes": [0],
-            "filter_approach": "postfilter",
-            "exact_search_approach": "prefilter",
-            "n_repeat_runs": 1,
-            "query_indices": query_indices,
-            "filter_approach": "postfilter",
-        },
-        {
-            "clusters_to_search": 100,
-            "points_to_rerank": 2000,
-            "k": 10,
-            "filter_attributes": [0],
-            "filter_approach": "postfilter",
-            "exact_search_approach": "prefilter",
-            "n_repeat_runs": 1,
-            "query_indices": query_indices,
-            "filter_approach": "postfilter",
-        },
-        {
-            "clusters_to_search": 200,
-            "points_to_rerank": 2000,
-            "k": 10,
-            "filter_attributes": [0],
-            "filter_approach": "postfilter",
-            "exact_search_approach": "prefilter",
-            "n_repeat_runs": 1,
-            "query_indices": query_indices,
-            "filter_approach": "postfilter",
-        },
+        # {
+        #     "clusters_to_search": 10,
+        #     "points_to_rerank": 2000,
+        #     "k": 10,
+        #     "filter_attributes": [0],
+        #     "filter_approach": "indexing",
+        #     "exact_search_approach": "prefilter",
+        #     "n_repeat_runs": 1,
+        #     "query_indices": query_indices,
+        #     "filter_approach": "indexing",
+        # },
+        # {
+        #     "clusters_to_search": 100,
+        #     "points_to_rerank": 2000,
+        #     "k": 10,
+        #     "filter_attributes": [0],
+        #     "filter_approach": "indexing",
+        #     "exact_search_approach": "prefilter",
+        #     "n_repeat_runs": 1,
+        #     "query_indices": query_indices,
+        #     "filter_approach": "indexing",
+        # },
+        # {
+        #     "clusters_to_search": 200,
+        #     "points_to_rerank": 2000,
+        #     "k": 10,
+        #     "filter_attributes": [0],
+        #     "filter_approach": "indexing",
+        #     "exact_search_approach": "prefilter",
+        #     "n_repeat_runs": 1,
+        #     "query_indices": query_indices,
+        #     "filter_approach": "indexing",
+        # },
+        # {
+        #     "clusters_to_search": 300,
+        #     "points_to_rerank": 2000,
+        #     "k": 10,
+        #     "filter_attributes": [0],
+        #     "filter_approach": "indexing",
+        #     "exact_search_approach": "prefilter",
+        #     "n_repeat_runs": 1,
+        #     "query_indices": query_indices,
+        #     "filter_approach": "indexing",
+        # },
+        # {
+        #     "clusters_to_search": 400,
+        #     "points_to_rerank": 2000,
+        #     "k": 10,
+        #     "filter_attributes": [0],
+        #     "filter_approach": "indexing",
+        #     "exact_search_approach": "prefilter",
+        #     "n_repeat_runs": 1,
+        #     "query_indices": query_indices,
+        #     "filter_approach": "indexing",
+        # },
+        # {
+        #     "clusters_to_search": 500,
+        #     "points_to_rerank": 2000,
+        #     "k": 10,
+        #     "filter_attributes": [0],
+        #     "filter_approach": "indexing",
+        #     "exact_search_approach": "prefilter",
+        #     "n_repeat_runs": 1,
+        #     "query_indices": query_indices,
+        #     "filter_approach": "indexing",
+        # },
+        # {
+        #     "clusters_to_search": 10,
+        #     "points_to_rerank": 2000,
+        #     "k": 10,
+        #     "filter_attributes": [0],
+        #     "filter_approach": "postfilter",
+        #     "exact_search_approach": "prefilter",
+        #     "n_repeat_runs": 1,
+        #     "query_indices": query_indices,
+        #     "filter_approach": "postfilter",
+        # },
+        # {
+        #     "clusters_to_search": 100,
+        #     "points_to_rerank": 2000,
+        #     "k": 10,
+        #     "filter_attributes": [0],
+        #     "filter_approach": "postfilter",
+        #     "exact_search_approach": "prefilter",
+        #     "n_repeat_runs": 1,
+        #     "query_indices": query_indices,
+        #     "filter_approach": "postfilter",
+        # },
+        # {
+        #     "clusters_to_search": 200,
+        #     "points_to_rerank": 2000,
+        #     "k": 10,
+        #     "filter_attributes": [0],
+        #     "filter_approach": "postfilter",
+        #     "exact_search_approach": "prefilter",
+        #     "n_repeat_runs": 1,
+        #     "query_indices": query_indices,
+        #     "filter_approach": "postfilter",
+        # },
+        # {
+        #     "clusters_to_search": 300,
+        #     "points_to_rerank": 2000,
+        #     "k": 10,
+        #     "filter_attributes": [0],
+        #     "filter_approach": "postfilter",
+        #     "exact_search_approach": "prefilter",
+        #     "n_repeat_runs": 1,
+        #     "query_indices": query_indices,
+        #     "filter_approach": "postfilter",
+        # },
+        # {
+        #     "clusters_to_search": 400,
+        #     "points_to_rerank": 2000,
+        #     "k": 10,
+        #     "filter_attributes": [0],
+        #     "filter_approach": "postfilter",
+        #     "exact_search_approach": "prefilter",
+        #     "n_repeat_runs": 1,
+        #     "query_indices": query_indices,
+        #     "filter_approach": "postfilter",
+        # },
+        # {
+        #     "clusters_to_search": 500,
+        #     "points_to_rerank": 2000,
+        #     "k": 10,
+        #     "filter_attributes": [0],
+        #     "filter_approach": "postfilter",
+        #     "exact_search_approach": "prefilter",
+        #     "n_repeat_runs": 1,
+        #     "query_indices": query_indices,
+        #     "filter_approach": "postfilter",
+        # },
     ]
     
     
@@ -301,8 +400,8 @@ if __name__ == "__main__":
             avg_exact_search_latency = int(total_exact_latency) / n_repeat_runs
             avg_recall = total_recall / n_repeat_runs
             print(bcolors.WARNING + "Average recall: " + str(avg_recall) + bcolors.ENDC)
-            print(bcolors.OKBLUE + "Average exact (", param_set["filter_approach"], ") search latency: ", avg_exact_search_latency, " microseconds" + bcolors.ENDC)
-            print(bcolors.OKCYAN + "Average approximate (", param_set["exact_search_approach"], ") search latency: ", avg_approximate_search_latency, " microseconds" + bcolors.ENDC)
+            print(bcolors.OKBLUE + "Average exact (", param_set["exact_search_approach"], ") search latency: ", avg_exact_search_latency, " microseconds" + bcolors.ENDC)
+            print(bcolors.OKCYAN + "Average approximate (", param_set["filter_approach"], ") search latency: ", avg_approximate_search_latency, " microseconds" + bcolors.ENDC)
             if param_set["filter_approach"] not in outputs:
                 outputs[param_set["filter_approach"]] = [{**param_set, "recall": avg_recall, "approx_latency": avg_approximate_search_latency, "exact_latency": avg_exact_search_latency}]
             else:
@@ -315,11 +414,12 @@ if __name__ == "__main__":
                 print("all_approximate_latencies: ", (all_approximate_latencies))
                 all_exact_latencies = [o["exact_latency"] for o in outputs[filter_approach]]
                 plt.plot(all_recalls, all_approximate_latencies, label=filter_approach) # index_param_set["label"] if "label" in index_param_set else f"selectivity={index_param_set["a0_selectivity"]}"
-    labelLines(plt.gca().get_lines(), align=False)
-    plt.title("Latency, Recall, and Selectivity")
-    plt.ylabel("Latency (μs)")
-    plt.xlabel("Recall")
-    plt.savefig(f"../../figures/recall-latency_prefilter.png")
+    
+        labelLines(plt.gca().get_lines(), align=False)
+        plt.title(f"Latency, Recall, and {index_param_set["a0_selectivity"]} Selectivity ({n_input_vecs} points)")
+        plt.ylabel("Latency (μs)")
+        plt.xlabel("Recall")
+        plt.savefig(f"../../figures/recall-latency_a0{index_param_set["a0_selectivity"]}.png")
     plt.show()
 
 

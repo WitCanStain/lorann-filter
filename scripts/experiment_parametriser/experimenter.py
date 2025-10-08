@@ -69,12 +69,12 @@ if __name__ == "__main__":
         ctypes.c_bool) # verbose
         
 
-    dataset_filter_attribute_range = [i for i in range(50)]
-    n_input_vecs = 500000 #999994
+    dataset_filter_attribute_range = [i for i in range(10)]
+    n_input_vecs = 999994 #999994
     index_param_sets = [
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-        # "n_attributes_per_datapoint": 20,
+        # "n_attributes_per_datapoint": 10,
         # "n_attr_idx_partitions": 10,
         # "n_input_vecs": n_input_vecs,
         # "n_clusters": 700,
@@ -87,7 +87,7 @@ if __name__ == "__main__":
         # },
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-        # "n_attributes_per_datapoint": 20,
+        # "n_attributes_per_datapoint": 10,
         # "n_attr_idx_partitions": 10,
         # "n_input_vecs": n_input_vecs,
         # "n_clusters": 700,
@@ -100,7 +100,7 @@ if __name__ == "__main__":
         # },
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-        # "n_attributes_per_datapoint": 20,
+        # "n_attributes_per_datapoint": 10,
         # "n_attr_idx_partitions": 10,
         # "n_input_vecs": n_input_vecs,
         # "n_clusters": 700,
@@ -113,7 +113,7 @@ if __name__ == "__main__":
         # },
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-        # "n_attributes_per_datapoint": 20,
+        # "n_attributes_per_datapoint": 10,
         # "n_attr_idx_partitions": 10,
         # "n_input_vecs": n_input_vecs,
         # "n_clusters": 700,
@@ -126,7 +126,7 @@ if __name__ == "__main__":
         # },
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-        # "n_attributes_per_datapoint": 20,
+        # "n_attributes_per_datapoint": 10,
         # "n_attr_idx_partitions": 10,
         # "n_input_vecs": n_input_vecs,
         # "n_clusters": 700,
@@ -139,7 +139,7 @@ if __name__ == "__main__":
         # },
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-        # "n_attributes_per_datapoint": 20,
+        # "n_attributes_per_datapoint": 10,
         # "n_attr_idx_partitions": 10,
         # "n_input_vecs": n_input_vecs,
         # "n_clusters": 700,
@@ -152,7 +152,7 @@ if __name__ == "__main__":
         # },
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-        # "n_attributes_per_datapoint": 20,
+        # "n_attributes_per_datapoint": 10,
         # "n_attr_idx_partitions": 10,
         # "n_input_vecs": n_input_vecs,
         # "n_clusters": 700,
@@ -165,7 +165,7 @@ if __name__ == "__main__":
         # },
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-        # "n_attributes_per_datapoint": 20,
+        # "n_attributes_per_datapoint": 10,
         # "n_attr_idx_partitions": 10,
         # "n_input_vecs": n_input_vecs,
         # "n_clusters": 700,
@@ -176,35 +176,35 @@ if __name__ == "__main__":
         # "euclidean": True,
         # "dataset_file": "wiki-news-300d-1M.vec",
         # },
-        # {
-        # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-        # "n_attributes_per_datapoint": 20,
-        # "n_attr_idx_partitions": 10,
-        # "n_input_vecs": n_input_vecs,
-        # "n_clusters": 700,
-        # "global_dim": 256,
-        # "rank": 32,
-        # "train_size": 5,
-        # "a0_selectivity": 0.8,
-        # "euclidean": True,
-        # "dataset_file": "wiki-news-300d-1M.vec",
-        # },
         {
         "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-        "n_attributes_per_datapoint": 20,
+        "n_attributes_per_datapoint": 10,
         "n_attr_idx_partitions": 10,
         "n_input_vecs": n_input_vecs,
         "n_clusters": 700,
         "global_dim": 256,
         "rank": 32,
         "train_size": 5,
-        "a0_selectivity": 0.9,
+        "a0_selectivity": 0.8,
         "euclidean": True,
         "dataset_file": "wiki-news-300d-1M.vec",
         },
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-        # "n_attributes_per_datapoint": 20,
+        # "n_attributes_per_datapoint": 10,
+        # "n_attr_idx_partitions": 10,
+        # "n_input_vecs": n_input_vecs,
+        # "n_clusters": 700,
+        # "global_dim": 256,
+        # "rank": 32,
+        # "train_size": 5,
+        # "a0_selectivity": 0.9,
+        # "euclidean": True,
+        # "dataset_file": "wiki-news-300d-1M.vec",
+        # },
+        # {
+        # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
+        # "n_attributes_per_datapoint": 10,
         # "n_attr_idx_partitions": 10,
         # "n_input_vecs": n_input_vecs,
         # "n_clusters": 700,

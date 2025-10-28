@@ -7,6 +7,8 @@ import time
 import random
 import matplotlib.pyplot as plt
 from labellines import labelLines
+import json
+from datetime import datetime
 
 class bcolors:
     HEADER = '\033[95m'
@@ -19,6 +21,8 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
+todays_time = datetime.today().strftime('%Y-%m-%d %H:%M:%S')
+results_file_name = "1M-mixedincluded-full-experimental_results-" + todays_time + ".json"
 
 if __name__ == "__main__":
     # Load the shared library into ctypes
@@ -68,157 +72,156 @@ if __name__ == "__main__":
         ctypes.POINTER(ctypes.c_int), # exact_latency
         ctypes.c_bool) # verbose
         
-
+    dataset_file = "deep-image-96-angular.hdf5" #"fashion-mnist-784-euclidean.hdf5"
     dataset_filter_attribute_range = [i for i in range(10)]
-    n_input_vecs = 999994 #999994
+    n_input_vecs = 1000000 #999994 # 9990000 10m # 60k mnist
     index_param_sets = [
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
         # "n_attributes_per_datapoint": 10,
         # "n_attr_idx_partitions": 10,
         # "n_input_vecs": n_input_vecs,
-        # "n_clusters": 700,
+        # "n_clusters": 1024,
         # "global_dim": 256,
         # "rank": 32,
         # "train_size": 5,
         # "a0_selectivity": 0.01,
         # "euclidean": True,
-        # "dataset_file": "wiki-news-300d-1M.vec",
+        # "dataset_file": dataset_file,
         # },
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
         # "n_attributes_per_datapoint": 10,
         # "n_attr_idx_partitions": 10,
         # "n_input_vecs": n_input_vecs,
-        # "n_clusters": 700,
+        # "n_clusters": 1024,
         # "global_dim": 256,
         # "rank": 32,
         # "train_size": 5,
         # "a0_selectivity": 0.1,
         # "euclidean": True,
-        # "dataset_file": "wiki-news-300d-1M.vec",
+        # "dataset_file": dataset_file,
         # },
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
         # "n_attributes_per_datapoint": 10,
         # "n_attr_idx_partitions": 10,
         # "n_input_vecs": n_input_vecs,
-        # "n_clusters": 700,
+        # "n_clusters": 1024,
         # "global_dim": 256,
         # "rank": 32,
         # "train_size": 5,
         # "a0_selectivity": 0.2,
         # "euclidean": True,
-        # "dataset_file": "wiki-news-300d-1M.vec",
+        # "dataset_file": dataset_file,
         # },
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
         # "n_attributes_per_datapoint": 10,
         # "n_attr_idx_partitions": 10,
         # "n_input_vecs": n_input_vecs,
-        # "n_clusters": 700,
+        # "n_clusters": 1024,
         # "global_dim": 256,
         # "rank": 32,
         # "train_size": 5,
         # "a0_selectivity": 0.3,
         # "euclidean": True,
-        # "dataset_file": "wiki-news-300d-1M.vec",
+        # "dataset_file": dataset_file,
         # },
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
         # "n_attributes_per_datapoint": 10,
         # "n_attr_idx_partitions": 10,
         # "n_input_vecs": n_input_vecs,
-        # "n_clusters": 700,
+        # "n_clusters": 1024,
         # "global_dim": 256,
         # "rank": 32,
         # "train_size": 5,
         # "a0_selectivity": 0.4,
         # "euclidean": True,
-        # "dataset_file": "wiki-news-300d-1M.vec",
+        # "dataset_file": dataset_file,
         # },
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
         # "n_attributes_per_datapoint": 10,
         # "n_attr_idx_partitions": 10,
         # "n_input_vecs": n_input_vecs,
-        # "n_clusters": 700,
+        # "n_clusters": 1024,
         # "global_dim": 256,
         # "rank": 32,
         # "train_size": 5,
         # "a0_selectivity": 0.5,
         # "euclidean": True,
-        # "dataset_file": "wiki-news-300d-1M.vec",
+        # "dataset_file": dataset_file,
         # },
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
         # "n_attributes_per_datapoint": 10,
         # "n_attr_idx_partitions": 10,
         # "n_input_vecs": n_input_vecs,
-        # "n_clusters": 700,
+        # "n_clusters": 1024,
         # "global_dim": 256,
         # "rank": 32,
         # "train_size": 5,
         # "a0_selectivity": 0.6,
         # "euclidean": True,
-        # "dataset_file": "wiki-news-300d-1M.vec",
+        # "dataset_file": dataset_file,
         # },
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
         # "n_attributes_per_datapoint": 10,
         # "n_attr_idx_partitions": 10,
         # "n_input_vecs": n_input_vecs,
-        # "n_clusters": 700,
+        # "n_clusters": 1024,
         # "global_dim": 256,
         # "rank": 32,
         # "train_size": 5,
         # "a0_selectivity": 0.7,
         # "euclidean": True,
-        # "dataset_file": "wiki-news-300d-1M.vec",
+        # "dataset_file": dataset_file,
+        # },
+        # {
+        # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
+        # "n_attributes_per_datapoint": 10,
+        # "n_attr_idx_partitions": 10,
+        # "n_input_vecs": n_input_vecs,
+        # "n_clusters": 1024,
+        # "global_dim": 256,
+        # "rank": 32,
+        # "train_size": 5,
+        # "a0_selectivity": 0.8,
+        # "euclidean": True,
+        # "dataset_file": dataset_file,
         # },
         {
         "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
         "n_attributes_per_datapoint": 10,
         "n_attr_idx_partitions": 10,
         "n_input_vecs": n_input_vecs,
-        "n_clusters": 700,
+        "n_clusters": 1024,
         "global_dim": 256,
         "rank": 32,
         "train_size": 5,
-        "a0_selectivity": 0.8,
+        "a0_selectivity": 0.9,
         "euclidean": True,
-        "dataset_file": "wiki-news-300d-1M.vec",
+        "dataset_file": dataset_file,
         },
-        # {
-        # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-        # "n_attributes_per_datapoint": 10,
-        # "n_attr_idx_partitions": 10,
-        # "n_input_vecs": n_input_vecs,
-        # "n_clusters": 700,
-        # "global_dim": 256,
-        # "rank": 32,
-        # "train_size": 5,
-        # "a0_selectivity": 0.9,
-        # "euclidean": True,
-        # "dataset_file": "wiki-news-300d-1M.vec",
-        # },
-        # {
-        # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-        # "n_attributes_per_datapoint": 10,
-        # "n_attr_idx_partitions": 10,
-        # "n_input_vecs": n_input_vecs,
-        # "n_clusters": 700,
-        # "global_dim": 256,
-        # "rank": 32,
-        # "train_size": 5,
-        # "a0_selectivity": 0.99,
-        # "euclidean": True,
-        # "dataset_file": "wiki-news-300d-1M.vec",
-        # },
+        {
+        "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
+        "n_attributes_per_datapoint": 10,
+        "n_attr_idx_partitions": 10,
+        "n_input_vecs": n_input_vecs,
+        "n_clusters": 1024,
+        "global_dim": 256,
+        "rank": 32,
+        "train_size": 5,
+        "a0_selectivity": 0.99,
+        "euclidean": True,
+        "dataset_file": dataset_file,
+        },
     ]
     
-    query_indices = [random.randint(0, n_input_vecs) for i in range(100)]#[399529, 241926, 958223, 402175, 893348, 9781, 819157, 880067, 460738, 758298, 334374, 270022, 650928, 612145, 125639, 453611, 881900, 226359, 76249, 498268, 131075, 702495, 19438, 129779, 722313, 944585, 279510, 333237, 650012, 190935, 930905, 316057, 418856, 111895, 98062, 695562, 517225, 241595, 22717, 81649, 763585]
-    #[random.randint(0, n_input_vecs) for i in range(100)]
+    query_indices = [random.randint(0, n_input_vecs) for i in range(10)]#[399529, 241926, 958223, 402175, 893348, 9781, 819157, 880067, 460738, 758298, 334374, 2102422, 650928, 612145, 125639, 453611, 881900, 226359, 76249, 498268, 131075, 702495, 19438, 129779, 722313, 944585, 279510, 333237, 650012, 190935, 930905, 316057, 418856, 111895, 98062, 695562, 517225, 241595, 22717, 81649, 763585]
 
     search_param_sets = [
         {
@@ -485,14 +488,111 @@ if __name__ == "__main__":
             "query_indices": query_indices,
             "filter_approach": "postfilter",
         },
-        
+        {
+            "clusters_to_search": 10,
+            "points_to_rerank": 20000,
+            "k": 10,
+            "filter_attributes": [0],
+            "filter_approach": "mixed",
+            "exact_search_approach": "prefilter",
+            "n_repeat_runs": 1,
+            "query_indices": query_indices,
+            "filter_approach": "mixed",
+        },
+        {
+            "clusters_to_search": 20,
+            "points_to_rerank": 20000,
+            "k": 10,
+            "filter_attributes": [0],
+            "filter_approach": "mixed",
+            "exact_search_approach": "prefilter",
+            "n_repeat_runs": 1,
+            "query_indices": query_indices,
+            "filter_approach": "mixed",
+        },
+        {
+            "clusters_to_search": 30,
+            "points_to_rerank": 20000,
+            "k": 10,
+            "filter_attributes": [0],
+            "filter_approach": "mixed",
+            "exact_search_approach": "prefilter",
+            "n_repeat_runs": 1,
+            "query_indices": query_indices,
+            "filter_approach": "mixed",
+        },
+        {
+            "clusters_to_search": 40,
+            "points_to_rerank": 20000,
+            "k": 10,
+            "filter_attributes": [0],
+            "filter_approach": "mixed",
+            "exact_search_approach": "prefilter",
+            "n_repeat_runs": 1,
+            "query_indices": query_indices,
+            "filter_approach": "mixed",
+        },
+        {
+            "clusters_to_search": 50,
+            "points_to_rerank": 20000,
+            "k": 10,
+            "filter_attributes": [0],
+            "filter_approach": "mixed",
+            "exact_search_approach": "prefilter",
+            "n_repeat_runs": 1,
+            "query_indices": query_indices,
+            "filter_approach": "mixed",
+        },
+        {
+            "clusters_to_search": 60,
+            "points_to_rerank": 20000,
+            "k": 10,
+            "filter_attributes": [0],
+            "filter_approach": "mixed",
+            "exact_search_approach": "prefilter",
+            "n_repeat_runs": 1,
+            "query_indices": query_indices,
+            "filter_approach": "mixed",
+        },
+        {
+            "clusters_to_search": 100,
+            "points_to_rerank": 20000,
+            "k": 10,
+            "filter_attributes": [0],
+            "filter_approach": "mixed",
+            "exact_search_approach": "prefilter",
+            "n_repeat_runs": 1,
+            "query_indices": query_indices,
+            "filter_approach": "mixed",
+        },
+        {
+            "clusters_to_search": 150,
+            "points_to_rerank": 20000,
+            "k": 10,
+            "filter_attributes": [0],
+            "filter_approach": "mixed",
+            "exact_search_approach": "prefilter",
+            "n_repeat_runs": 1,
+            "query_indices": query_indices,
+            "filter_approach": "mixed",
+        },
         
     ]
     
     
     # experimenter parameters
     n_repeat_runs = 1
+    verbose = False
     
+
+    try:
+        with open(results_file_name, "r", encoding="utf-8") as f:
+            experiment_data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        print("File not found.")
+        experiment_data = {}
+    for key in experiment_data.keys():
+        print(json.loads(key), ": ", experiment_data[key])
 
     for (idx, index_param_set) in enumerate(index_param_sets):
         
@@ -518,10 +618,12 @@ if __name__ == "__main__":
         end_time = time.process_time()
         elapsed_time = end_time - start_time
         print("Time taken to build index: ", elapsed_time)
+        index_param_set["dataset_filter_attributes"] = index_param_set["dataset_filter_attributes"].tolist()
+        index_param_dump = json.dumps(index_param_set, sort_keys=True, ensure_ascii=False)
+        this_results_dict = {}
         outputs = {}
-
         fig, ax = plt.subplots()
-    
+
         for param_set in search_param_sets:
             print(f"Using {n_input_vecs} inputs and {param_set["filter_approach"]} filter method and {param_set["exact_search_approach"]} exact search approach.")
             print(f"Running experimenter with search parameters:\n\
@@ -559,7 +661,7 @@ if __name__ == "__main__":
                     ctypes.byref(recall),
                     ctypes.byref(approx_latency),
                     ctypes.byref(exact_latency),
-                    False
+                    verbose
                 )
                 recalls.append(recall.value)
                 approx_latencies.append(approx_latency.value)
@@ -579,7 +681,7 @@ if __name__ == "__main__":
                 outputs[param_set["filter_approach"]] = [{**param_set, "recall": avg_recall, "approx_latency": avg_approximate_search_latency, "exact_latency": avg_exact_search_latency}]
             else:
                 outputs[param_set["filter_approach"]].append({**param_set, "recall": avg_recall, "approx_latency": avg_approximate_search_latency, "exact_latency": avg_exact_search_latency})
-        for filter_approach in ["prefilter", "indexing", "postfilter"]:
+        for filter_approach in ["prefilter", "indexing", "postfilter", "mixed"]:
             if filter_approach in outputs:
                 all_recalls = [o["recall"] for o in outputs[filter_approach]]
                 all_approximate_latencies = [o["approx_latency"] for o in outputs[filter_approach]]
@@ -587,14 +689,17 @@ if __name__ == "__main__":
                 print("all_approximate_latencies: ", (all_approximate_latencies))
                 all_exact_latencies = [o["exact_latency"] for o in outputs[filter_approach]]
                 ax.plot(all_recalls, all_approximate_latencies, label=filter_approach) # index_param_set["label"] if "label" in index_param_set else f"selectivity={index_param_set["a0_selectivity"]}"
-                # print("all_recalls: ", all_recalls)
-                # print("all_approximate_latencies: ", all_approximate_latencies)
-    
+                print("all_recalls: ", all_recalls)
+                print("all_approximate_latencies: ", all_approximate_latencies)
+                this_results_dict[filter_approach]= {"approximate_latencies": all_approximate_latencies, "exact_latencies": all_exact_latencies, "recalls": all_recalls}
+        experiment_data[index_param_dump] = this_results_dict
+        with open(results_file_name, 'w') as f:
+            json.dump(experiment_data, f)
         labelLines(ax.get_lines(), align=False)
         ax.set_title(f"Latency, Recall, and {index_param_set["a0_selectivity"]} Selectivity ({n_input_vecs} points)")
         ax.set_ylabel("Latency (μs)")
         ax.set_xlabel("Recall")
-        fig.savefig(f"../../figures/recall-latency_a0{index_param_set["a0_selectivity"]}.png")
+        fig.savefig(f"../../figures/1m-mixedincluded-full-recall-latency_a0{index_param_set["a0_selectivity"]}.png")
     # plt.show()
 
 

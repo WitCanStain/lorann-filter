@@ -65,9 +65,8 @@ RowMatrix* load_vectors(
                 throw std::runtime_error("Requested more vectors than available in HDF5 dataset");
             }
 
-            std::vector<float> buffer(n_input_vecs * d);
+            std::vector<float> buffer(n * d);
             dataset.read(buffer.data(), H5::PredType::NATIVE_FLOAT);
-
             ret_ptr = new RowMatrix(n_input_vecs, d);
 
             for (int i = 0; i < n_input_vecs; ++i) {
@@ -351,8 +350,8 @@ extern "C" {
     if (approx_indices_match_rate < 1) std::cout << "Approximate indices match rate: " << ((double) approx_indices_true_matches) / (n_idxs*k) << std::endl;
     std::chrono::microseconds avg_exact_duration = total_exact_duration / n_idxs;
     std::chrono::microseconds avg_approx_duration = total_approx_duration / n_idxs;
-    std::cout << "Average exact query duration: " << avg_exact_duration.count() << " microseconds" << std::endl;
-    std::cout << "Average approx query duration: " << avg_approx_duration.count() << " microseconds" << std::endl;
+    // std::cout << "Average exact query duration: " << avg_exact_duration.count() << " microseconds" << std::endl;
+    // std::cout << "Average approx query duration: " << avg_approx_duration.count() << " microseconds" << std::endl;
     float sum = 0;
     for (size_t i = 0; i < n_idxs; ++i) {
       // std::cout << "recall: " << recall_vec[i] << std::endl;

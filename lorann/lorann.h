@@ -142,11 +142,11 @@ class Lorann : public LorannBase {
     double found_ratio_avg;
     int cumulative_cluster_size = 0;
     auto stop_prework = std::chrono::high_resolution_clock::now();
-    auto start_clusters = std::chrono::high_resolution_clock::now();
     std::chrono::nanoseconds total_filter_duration = (std::chrono::nanoseconds) 0;
     std::chrono::microseconds total_filter_preloop_duration = (std::chrono::microseconds) 0;
     std::chrono::microseconds total_prefilter_duration = (std::chrono::microseconds) 0;
     std::chrono::microseconds total_duration_matvec = (std::chrono::microseconds) 0;
+    auto start_clusters = std::chrono::high_resolution_clock::now();
 
     int cumulative_found_points = 0;
     int i = 0;
@@ -316,9 +316,11 @@ class Lorann : public LorannBase {
       }
       // std::cout << "after memcpy" << std::endl;
     }
-    // std::cout << "after cluster loop" << std::endl;
     auto stop_clusters = std::chrono::high_resolution_clock::now();
+    
     auto duration_clusters = std::chrono::duration_cast<std::chrono::microseconds>(stop_clusters - start_clusters);
+    std::cout << "Prefiltering stopped after " << i << " clusters searched" << std::endl;
+    std::cout << "duration_clusters: " << duration_clusters.count() << " microseconds for " << filter_approach << std::endl;
     auto duration_prework = std::chrono::duration_cast<std::chrono::microseconds>(stop_prework - start_prework);
     if (filter_approach != "postfilter" && filter_approach != "mixed" && !matching_results_found) {
       throw std::runtime_error("No matches found for filter attributes!");
@@ -335,16 +337,16 @@ class Lorann : public LorannBase {
       std::cout << "total_smallest_idx_sizes: " << total_smallest_idx_sizes << std::endl;
     }
     auto start_postwork = std::chrono::high_resolution_clock::now();
-    ColVector filtered_distances(current_cumulative_size);
-    for (int i = 0; i < current_cumulative_size; ++i) { // this is needed because all_distances when using indexing will have more reserved memory than there are filtered datapoints so we need to filter it to include only the number of datapoints we want.
-      filtered_distances[i] = all_distances[i];
-    }
+    // ColVector filtered_distances(current_cumulative_size);
+    // for (int i = 0; i < current_cumulative_size; ++i) { // this is needed because all_distances when using indexing will have more reserved memory than there are filtered datapoints so we need to filter it to include only the number of datapoints we want.
+    //   filtered_distances[i] = all_distances[i];
+    // }
     Eigen::VectorXi shuffled_out(k); // why is this needed?
-    // std::cout << "k: " << k << std::endl;
-    // std::cout << "current_cumulative_size 1: " << current_cumulative_size << std::endl;
-    // std::cout << "points_to_rerank: " << points_to_rerank << std::endl;
+    std::cout << "current_cumulative_size for " << filter_approach << ": " << current_cumulative_size << std::endl;
     select_final(_euclidean ? data : scaled_query.data(), k, points_to_rerank, current_cumulative_size,
-                 all_idxs.data(), filtered_distances.data(), shuffled_out.data(), dist_out);
+                 all_idxs.data(), all_distances.data(), shuffled_out.data(), dist_out);
+    auto stop_postwork = std::chrono::high_resolution_clock::now();
+    auto start_postfilter = std::chrono::high_resolution_clock::now();
     if (filter_approach == "postfilter" || filter_approach == "mixed") {
       std::vector<int> matched_idxs;
       matched_idxs.reserve(k);
@@ -361,7 +363,7 @@ class Lorann : public LorannBase {
         matched_idxs.clear();
         Eigen::VectorXi new_out(new_k);
         select_final(_euclidean ? data : scaled_query.data(), new_k, points_to_rerank, current_cumulative_size,
-                 all_idxs.data(), filtered_distances.data(), new_out.data(), dist_out);
+                 all_idxs.data(), all_distances.data(), new_out.data(), dist_out);
         for (int i = 0; i < new_k; ++i) {
           bool filters_match = _attributes.matches(new_out[i], filter_attributes);
           if (filters_match) {
@@ -386,8 +388,11 @@ class Lorann : public LorannBase {
         idx_out[i] = shuffled_out[i];
       }
     }
-    auto stop_postwork = std::chrono::high_resolution_clock::now();
+    auto stop_postfilter = std::chrono::high_resolution_clock::now();
     auto duration_postwork = std::chrono::duration_cast<std::chrono::microseconds>(stop_postwork - start_postwork);
+    std::cout << "duration_postwork: " << duration_postwork.count() << " microseconds for " << filter_approach << std::endl;
+    auto duration_postfilter = std::chrono::duration_cast<std::chrono::microseconds>(stop_postfilter - start_postfilter);
+    std::cout << "duration_postfilter: " << duration_postfilter.count() << " microseconds for " << filter_approach << std::endl;
   }
   
   using LorannBase::build;

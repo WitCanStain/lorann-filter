@@ -5,11 +5,12 @@ all: example
 
 prepare-data:
 	@echo "Preparing data..."
-	wget "https://dl.fbaipublicfiles.com/fasttext/vectors-english/wiki-news-300d-1M.vec.zip" -q --show-progress
-	unzip wiki-news-300d-1M.vec.zip
-	rm wiki-news-300d-1M.vec.zip
-	wget "http://ann-benchmarks.com/fashion-mnist-784-euclidean.hdf5" -q --show-progress
-	wget "http://ann-benchmarks.com/deep-image-96-angular.hdf5" -q --show-progress
+# 	wget "https://dl.fbaipublicfiles.com/fasttext/vectors-english/wiki-news-300d-1M.vec.zip" -q --show-progress
+# 	unzip wiki-news-300d-1M.vec.zip
+# 	rm wiki-news-300d-1M.vec.zip
+# 	wget "http://ann-benchmarks.com/fashion-mnist-784-euclidean.hdf5" -q --show-progress
+# 	wget "http://ann-benchmarks.com/deep-image-96-angular.hdf5" -q --show-progress
+	wget "http://ann-benchmarks.com/gist-960-euclidean.hdf5" -q --show-progress
 
 example:
 	$(CXX) -std=c++17 -O3 -march=native -fopenmp -DNDEBUG -I../../lorann -flax-vector-conversions example.cpp -o example -lgomp

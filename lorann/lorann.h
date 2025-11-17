@@ -72,12 +72,20 @@ class Lorann : public LorannBase {
    * @param idx_out The index output array of length k
    * @param dist_out The (optional) distance output array of length k
    */
-  void search(const float *data, const int k, const int clusters_to_search,
+  void search(const float *data, const int k, const int M, const int clusters_to_search,
               const int points_to_rerank, int *idx_out, attribute_set& filter_attributes, std::string filter_approach, float *dist_out = nullptr, bool verbose=false) const override {
     auto start_prework = std::chrono::high_resolution_clock::now();
     ColVector scaled_query;
     ColVector transformed_query;
     Eigen::Map<const Eigen::VectorXf> data_vec(data, _dim);
+    bool use_attr_indexing = (filter_approach != "postfilter");
+            
+    if (use_attr_indexing && M == -1) {
+      throw std::invalid_argument("Parameter M must be set when using attribute indexing.");
+    }
+    if (!use_attr_indexing && M != -1) {
+      std::cout << "Parameter M has no effect with postfilter approach." << std::endl;
+    }
     if (_euclidean) {
       scaled_query = -2. * data_vec;
     } else {
@@ -104,31 +112,52 @@ class Lorann : public LorannBase {
     const float compensation = quantized_query.cast<float>().sum();
     const float compensation_data = compensation * quant_data.compensation_factor;
     const float compensation_query = compensation * quant_query.compensation_factor;
-    std::vector<int> I(clusters_to_search);
-    select_nearest_clusters(quantized_query, quantization_factor, principal_axis,
-                            compensation_query, clusters_to_search, I.data());
-    const int total_pts = _cluster_sizes(I).sum();
-    
-    ColVector all_distances(total_pts);
-    ColVectorInt all_idxs(total_pts); // all_idxs contains the original indexes of all resultant datapoints from the query
+    // std::vector<int> I(clusters_to_search);
+    //
+    int n_clusters = _centroids_quantized.cols();
+    std::cout << "n_clusters: " << n_clusters << std::endl;
+    ColVectorInt cluster_labels(n_clusters);
+    ColVector cluster_dists(n_clusters);
+    //
+    compute_cluster_distances_sorted(quantized_query, quantization_factor, principal_axis,
+                                     compensation_query, cluster_labels.data(), cluster_dists.data());
+    // select_nearest_clusters(quantized_query, quantization_factor, principal_axis,
+    //                         compensation_query, clusters_to_search, I.data());
+    // const int total_pts = _cluster_sizes(I).sum();
+    const int required_points = M*k;
+    std::cout << "required_points " << required_points << std::endl;
+    ColVector all_distances(2 * required_points); // multiply by 2 to be safe and avoid reallocs
+    ColVectorInt all_idxs(2 * required_points); // all_idxs contains the original indexes of all resultant datapoints from the query
     ColVector tmp(_max_rank);
 
+    
+
     int current_cumulative_size = 0;
-    bool use_attr_indexing = (filter_approach == "indexing" || filter_approach == "prefilter" || filter_approach == "mixed");
     int total_smallest_idx_sizes = 0; // temporary, remove
     bool matching_results_found = false;
     double found_ratio_avg;
     int cumulative_cluster_size = 0;
-    int cumulative_found_points = 0;
     auto stop_prework = std::chrono::high_resolution_clock::now();
     auto start_clusters = std::chrono::high_resolution_clock::now();
     std::chrono::nanoseconds total_filter_duration = (std::chrono::nanoseconds) 0;
     std::chrono::microseconds total_filter_preloop_duration = (std::chrono::microseconds) 0;
     std::chrono::microseconds total_prefilter_duration = (std::chrono::microseconds) 0;
     std::chrono::microseconds total_duration_matvec = (std::chrono::microseconds) 0;
-    for (int i = 0; i < clusters_to_search; ++i) {
-      // std::cout << "searching cluster " << i << "/" << clusters_to_search << std::endl;
-      const int cluster = I[i];
+
+    int cumulative_found_points = 0;
+    int i = 0;
+    auto cond = [&]() {
+      if (use_attr_indexing) {
+        return cumulative_found_points < required_points && i < n_clusters;
+      } else {
+        return i < clusters_to_search;
+      }
+    };
+    std::cout << "starting cluster loop, filter_approach " << filter_approach << std::endl;
+    while (cond()) {
+      const int cluster = cluster_labels[i];
+      std::cout << "processing i " << i << " cluster " << cluster << std::endl;
+      i++;
       const int sz = _cluster_sizes[cluster];
       if (sz == 0) continue;
       cumulative_cluster_size += sz;
@@ -223,10 +252,11 @@ class Lorann : public LorannBase {
         auto duration_prefilter = std::chrono::duration_cast<std::chrono::microseconds>(stop_prefilter - start_prefilter);
         total_prefilter_duration += duration_prefilter;
       }
-      // std::cout << filter_approach << " n_filtered_cluster_datapoints: " << n_filtered_cluster_datapoints << std::endl;
+      
+      std::cout << filter_approach << " n_filtered_cluster_datapoints: " << n_filtered_cluster_datapoints << std::endl;
       cumulative_found_points += n_filtered_cluster_datapoints;
-      // std::cout << filter_approach << " cumulative_found_points: " << cumulative_found_points << std::endl;
-      if (( filter_approach != "postfilter" && n_filtered_cluster_datapoints == 0)) continue;
+      std::cout << "cumulative_found_points: " << cumulative_found_points << std::endl;
+      if ((use_attr_indexing && n_filtered_cluster_datapoints == 0)) continue;
       const ColMatrixUInt8 &A = _A[cluster];
       const ColMatrixUInt8 &B = _B[cluster];
       const Vector &A_correction = _A_corrections[cluster];
@@ -252,12 +282,14 @@ class Lorann : public LorannBase {
                                                     principal_axis_tmp, compensation_tmp,
                                                     &all_distances[current_cumulative_size]);
       }
+      std::cout << "after matvec" << std::endl;
       auto stop_matvec = std::chrono::high_resolution_clock::now();
       auto duration_matvec = std::chrono::duration_cast<std::chrono::microseconds>(stop_matvec - start_matvec);
       total_duration_matvec += duration_matvec;
       if (_euclidean)
         add_inplace(_cluster_norms[cluster].data(), &all_distances[current_cumulative_size],
                     _cluster_norms[cluster].size());
+      std::cout << "after add_inplace" << std::endl;
       if (use_attr_indexing) { // when we use indexing, we process fewer results than the full size of the cluster due to filtering them beforehand.
         std::memcpy(&all_idxs[current_cumulative_size], attribute_data_idxs_ptr->data(), n_filtered_cluster_datapoints * sizeof(int));
         current_cumulative_size += n_filtered_cluster_datapoints;
@@ -265,7 +297,9 @@ class Lorann : public LorannBase {
         std::memcpy(&all_idxs[current_cumulative_size], _cluster_map[cluster].data(), sz * sizeof(int));
         current_cumulative_size += sz;
       }
+      std::cout << "after memcpy" << std::endl;
     }
+    std::cout << "after cluster loop" << std::endl;
     auto stop_clusters = std::chrono::high_resolution_clock::now();
     auto duration_clusters = std::chrono::duration_cast<std::chrono::microseconds>(stop_clusters - start_clusters);
     auto duration_prework = std::chrono::duration_cast<std::chrono::microseconds>(stop_prework - start_prework);
@@ -371,7 +405,8 @@ class Lorann : public LorannBase {
       // for (const auto& subvec : attr_subvecs) {
       //   std::cout << subvec.size() << " ";
       // }
-      std::cout << std::endl;
+      int attribute_integers_per_point = (_n_attributes + sizeof(uint32_t) - 1) / sizeof(uint32_t);
+      int points_per_avx512_vector = 512 / (attribute_integers_per_point * sizeof(uint32_t));
       for (const auto& attr_subvec : attr_subvecs) {
         BitsetMatrix attribute_subvec_bitset;
         attribute_subvec_bitset.init(1, _n_attributes);
@@ -576,6 +611,32 @@ class Lorann : public LorannBase {
       add_inplace(_global_centroid_norms.data(), dists.data(), _global_centroid_norms.size());
     select_k(k, out, _centroids_quantized.cols(), NULL, dists.data());
   }
+
+
+
+  void compute_cluster_distances_sorted(const VectorInt8 &query_quantized, const float quantization_factor,
+                               const float correction, const float compensation, int* labels,
+                               float* dists) const {
+    quant_query.quantized_matvec_product_A(_centroids_quantized, query_quantized,
+                                           _centroid_correction, quantization_factor, correction,
+                                           compensation, dists);
+    if (_euclidean)
+      add_inplace(_global_centroid_norms.data(), dists, _global_centroid_norms.size());
+    
+
+    int k_base = _centroids_quantized.cols();
+    std::vector<int> perm(k_base);
+    for (int i = 0; i < k_base; ++i) {
+      perm[i] = i;
+    }
+    ArgsortComparator comp = {dists};
+    miniselect::pdqpartial_sort_branchless(perm.begin(), perm.begin() + k_base, perm.end(), comp);
+    for (int i = 0; i < k_base; ++i) {
+      labels[i] = perm[i];
+    }
+  }
+
+
 
   friend class cereal::access;
 

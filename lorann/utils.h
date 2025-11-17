@@ -379,14 +379,8 @@ static void select_k(const int k, int *labels, const int k_base, const int *base
   } else {
     miniselect::pdqselect_branchless(perm.begin(), perm.begin() + k, perm.end(), comp);
   }
-  // std::cout << "perm: " << std::endl;  
-  // for (int i = 0; i<k_base; i++) {
-  //   std::cout << perm[i] << " ";  
-  // }
-  // std::cout << "k is: " << k << std::endl;
   if (base_labels != NULL) {
     for (int i = 0; i < k; ++i) {
-      // std::cout << "perm["<<i<<"]: " << perm[i] << " - base_labels["<<perm[i]<<"]: " << base_labels[perm[i]] << std::endl;
       labels[i] = base_labels[perm[i]];
     }
   } else {
@@ -400,6 +394,11 @@ static void select_k(const int k, int *labels, const int k_base, const int *base
       distances[i] = base_distances[perm[i]];
     }
   }
+}
+
+static void select_next(const int prev, const int k, int *labels, const int k_base, const int *base_labels,
+                     const float *base_distances, float *distances = nullptr, bool sorted = false) {
+  select_k(k, labels, prev, base_labels, base_distances, distances);
 }
 
 /* Samples n random rows from the matrix X using reservoir sampling */

@@ -269,6 +269,7 @@ extern "C" {
     int* idxs,
     int n_idxs,
     int k,
+    int M,
     int clusters_to_search,
     int points_to_rerank,
     int* int_filter_attributes,
@@ -306,12 +307,13 @@ extern "C" {
       }
       auto stop_exact = std::chrono::high_resolution_clock::now();
       auto duration_exact = std::chrono::duration_cast<std::chrono::microseconds>(stop_exact - start_exact);
+      std::cout << "exact query finished" << std::endl;
       total_exact_duration = total_exact_duration + duration_exact;
       all_exact_indices.push_back(exact_indices);
       Eigen::VectorXi approx_indices(k);
       auto start_approx = std::chrono::high_resolution_clock::now();
       try {
-        index.search((*Q_ptr).row(idxs[i]).data(), k, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_approach, nullptr, verbose);
+        index.search((*Q_ptr).row(idxs[i]).data(), k, M, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_approach, nullptr, verbose);
       } catch (const std::runtime_error &e) {
         std::cout << e.what() << std::endl;
         break;

@@ -307,7 +307,6 @@ extern "C" {
       }
       auto stop_exact = std::chrono::high_resolution_clock::now();
       auto duration_exact = std::chrono::duration_cast<std::chrono::microseconds>(stop_exact - start_exact);
-      std::cout << "exact query finished" << std::endl;
       total_exact_duration = total_exact_duration + duration_exact;
       all_exact_indices.push_back(exact_indices);
       Eigen::VectorXi approx_indices(k);

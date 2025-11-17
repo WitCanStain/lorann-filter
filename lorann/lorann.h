@@ -7,6 +7,7 @@
 #include <Eigen/Dense>
 #include <cstring>
 #include <stdexcept>
+#include <algorithm>
 #include <vector>
 
 #include "lorann_base.h"
@@ -113,21 +114,24 @@ class Lorann : public LorannBase {
     const float compensation_data = compensation * quant_data.compensation_factor;
     const float compensation_query = compensation * quant_query.compensation_factor;
     // std::vector<int> I(clusters_to_search);
-    //
+
     int n_clusters = _centroids_quantized.cols();
-    std::cout << "n_clusters: " << n_clusters << std::endl;
     ColVectorInt cluster_labels(n_clusters);
     ColVector cluster_dists(n_clusters);
-    //
+
     compute_cluster_distances_sorted(quantized_query, quantization_factor, principal_axis,
                                      compensation_query, cluster_labels.data(), cluster_dists.data());
-    // select_nearest_clusters(quantized_query, quantization_factor, principal_axis,
-    //                         compensation_query, clusters_to_search, I.data());
-    // const int total_pts = _cluster_sizes(I).sum();
-    const int required_points = M*k;
-    std::cout << "required_points " << required_points << std::endl;
-    ColVector all_distances(2 * required_points); // multiply by 2 to be safe and avoid reallocs
-    ColVectorInt all_idxs(2 * required_points); // all_idxs contains the original indexes of all resultant datapoints from the query
+
+    // compute safe allocation size for result buffers
+    const int total_pts_all = _cluster_sizes.sum();
+    const int required_points = use_attr_indexing ? (M * k) : 0;
+    int allocate_pts = total_pts_all;
+    if (use_attr_indexing) {
+      allocate_pts = std::max(total_pts_all, 2 * required_points);
+    }
+    if (allocate_pts <= 0) allocate_pts = 1;
+    ColVector all_distances(allocate_pts);
+    ColVectorInt all_idxs(allocate_pts); // all_idxs contains the original indexes of all resultant datapoints from the query
     ColVector tmp(_max_rank);
 
     
@@ -153,11 +157,13 @@ class Lorann : public LorannBase {
         return i < clusters_to_search;
       }
     };
-    std::cout << "starting cluster loop, filter_approach " << filter_approach << std::endl;
     while (cond()) {
       const int cluster = cluster_labels[i];
-      std::cout << "processing i " << i << " cluster " << cluster << std::endl;
       i++;
+      // validate cluster index to avoid out-of-bounds access
+      if (cluster < 0 || cluster >= _n_clusters) {
+        throw std::runtime_error("Invalid cluster index encountered in search()");
+      }
       const int sz = _cluster_sizes[cluster];
       if (sz == 0) continue;
       cumulative_cluster_size += sz;
@@ -253,9 +259,9 @@ class Lorann : public LorannBase {
         total_prefilter_duration += duration_prefilter;
       }
       
-      std::cout << filter_approach << " n_filtered_cluster_datapoints: " << n_filtered_cluster_datapoints << std::endl;
+      // std::cout << filter_approach << " n_filtered_cluster_datapoints: " << n_filtered_cluster_datapoints << std::endl;
       cumulative_found_points += n_filtered_cluster_datapoints;
-      std::cout << "cumulative_found_points: " << cumulative_found_points << std::endl;
+      // std::cout << "cumulative_found_points: " << cumulative_found_points << std::endl;
       if ((use_attr_indexing && n_filtered_cluster_datapoints == 0)) continue;
       const ColMatrixUInt8 &A = _A[cluster];
       const ColMatrixUInt8 &B = _B[cluster];
@@ -282,24 +288,35 @@ class Lorann : public LorannBase {
                                                     principal_axis_tmp, compensation_tmp,
                                                     &all_distances[current_cumulative_size]);
       }
-      std::cout << "after matvec" << std::endl;
+      // std::cout << "after matvec" << std::endl;
       auto stop_matvec = std::chrono::high_resolution_clock::now();
       auto duration_matvec = std::chrono::duration_cast<std::chrono::microseconds>(stop_matvec - start_matvec);
       total_duration_matvec += duration_matvec;
       if (_euclidean)
         add_inplace(_cluster_norms[cluster].data(), &all_distances[current_cumulative_size],
                     _cluster_norms[cluster].size());
-      std::cout << "after add_inplace" << std::endl;
+      // std::cout << "after add_inplace" << std::endl;
+      // Copy indexes into the aggregate buffer, grow if necessary to avoid buffer overflow
+      int to_copy = use_attr_indexing ? n_filtered_cluster_datapoints : sz;
+      int needed_size = current_cumulative_size + to_copy;
+      if (needed_size > all_idxs.size()) {
+        int new_size = std::max(needed_size, static_cast<int>(all_idxs.size() * 2));
+        if (new_size <= 0) new_size = needed_size; // defensive
+        all_idxs.conservativeResize(new_size);
+        all_distances.conservativeResize(new_size);
+      }
       if (use_attr_indexing) { // when we use indexing, we process fewer results than the full size of the cluster due to filtering them beforehand.
-        std::memcpy(&all_idxs[current_cumulative_size], attribute_data_idxs_ptr->data(), n_filtered_cluster_datapoints * sizeof(int));
+        if (n_filtered_cluster_datapoints > 0)
+          std::memcpy(&all_idxs[current_cumulative_size], attribute_data_idxs_ptr->data(), n_filtered_cluster_datapoints * sizeof(int));
         current_cumulative_size += n_filtered_cluster_datapoints;
       } else {
-        std::memcpy(&all_idxs[current_cumulative_size], _cluster_map[cluster].data(), sz * sizeof(int));
+        if (sz > 0)
+          std::memcpy(&all_idxs[current_cumulative_size], _cluster_map[cluster].data(), sz * sizeof(int));
         current_cumulative_size += sz;
       }
-      std::cout << "after memcpy" << std::endl;
+      // std::cout << "after memcpy" << std::endl;
     }
-    std::cout << "after cluster loop" << std::endl;
+    // std::cout << "after cluster loop" << std::endl;
     auto stop_clusters = std::chrono::high_resolution_clock::now();
     auto duration_clusters = std::chrono::duration_cast<std::chrono::microseconds>(stop_clusters - start_clusters);
     auto duration_prework = std::chrono::duration_cast<std::chrono::microseconds>(stop_prework - start_prework);

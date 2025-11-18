@@ -9,6 +9,8 @@
 #include <boost/container/flat_set.hpp>
 #include <boost/dynamic_bitset.hpp>
 #include <bitset_matrix.h>
+#include <cstdint>
+
 #define KMEANS_ITERATIONS 10
 #define KMEANS_MAX_BALANCE_DIFF 16
 #define SAMPLED_POINTS_PER_CLUSTER 256
@@ -20,11 +22,12 @@ namespace Lorann {
 typedef BitsetMatrix attribute_set;
 //typedef boost::container::flat_set<int> attribute_set;
 typedef std::unordered_map<BitsetMatrix::BitsetKey, std::vector<int>, BitsetMatrix::BitsetKeyHash> attribute_data_map;
+typedef std::unordered_map<BitsetMatrix::BitsetKey, std::vector<uint32_t>, BitsetMatrix::BitsetKeyHash> int32_attribute_data_map;
 
 class LorannBase {
  public:
-  LorannBase(float *data, int m, int d, int n_clusters, int global_dim, BitsetMatrix& attributes, std::vector<int>& attribute_idxs, int rank, int train_size,
-             bool euclidean, bool balanced)
+  LorannBase(float *data, int m, int d, int n_clusters, int global_dim, BitsetMatrix& attributes, std::vector<int>& attribute_idxs, std::vector<std::uint32_t>& attribute_ints,   int rank, int train_size,
+            bool euclidean, bool balanced)
       : _data(data),
         _n_samples(m),
         _dim(d),
@@ -32,6 +35,7 @@ class LorannBase {
         _global_dim(global_dim <= 0 ? d : std::min(global_dim, d)),
         _attributes(attributes),
         _attribute_idxs(attribute_idxs),
+        _attribute_ints(attribute_ints),
         _max_rank(std::min(rank, d)),
         _train_size(train_size),
         _euclidean(euclidean),
@@ -127,7 +131,7 @@ class LorannBase {
                      int num_threads) {}
 
   virtual void search(const float *data, const int k, const int M, const int clusters_to_search,
-                      const int points_to_rerank, int *idx_out, attribute_set& filter_attributes, std::string filter_approach, float *dist_out = nullptr, bool verbose=false) const {}
+                      const int points_to_rerank, int *idx_out, attribute_set& filter_attributes, uint32_t filter_attributes_int, std::string filter_approach, float *dist_out = nullptr, bool verbose=false) const {}
 
   virtual ~LorannBase() {}
 
@@ -431,12 +435,19 @@ class LorannBase {
     /* Create filter attribute index maps for clusters for approximate search */
     for (int i = 0; i < _cluster_map.size(); i++) {
       attribute_data_map this_cluster_attribute_data_map;
+      int32_attribute_data_map this_cluster_attribute_int_data_map;
       attribute_data_map this_cluster_reverse_index_map;
+      std::vector<uint32_t> this_cluster_attributes_int;
       
       std::vector<int> cluster = _cluster_map[i];
+      for (int j = 0; j < cluster.size(); j++) {
+        // this_cluster_attributes.push_back(_attributes[cluster[j]]);
+        this_cluster_attributes_int.push_back(_attribute_ints[cluster[j]]);
+      }
       // std::cout << "Clustering cluster " << i << " with size " << cluster.size() << std::endl;
       for (BitsetMatrix& attr_bitset : attribute_partition_sets) {
         std::vector<int> attribute_data_idx_vec; // vector of indexes of datapoints that have at least one of the attributes in attribute_subvec_set
+        std::vector<uint32_t> attribute_int_data_idx_vec;
         attribute_data_idx_vec.reserve(cluster.size());
         int non_applicable_points = 0;
         std::vector<int> this_cluster_reverse_index;
@@ -445,6 +456,7 @@ class LorannBase {
           bool any_match = _attributes.any_match(idx, attr_bitset);
           if (any_match) {
             attribute_data_idx_vec.push_back(idx);
+            attribute_int_data_idx_vec.push_back(_attribute_ints[idx]);
             this_cluster_reverse_index.push_back(i);
           } else {
             non_applicable_points++;
@@ -459,10 +471,13 @@ class LorannBase {
           // }
         }
         this_cluster_attribute_data_map.insert({attr_bitset.key(0), attribute_data_idx_vec});
+        this_cluster_attribute_int_data_map.insert({attr_bitset.key(0), attribute_int_data_idx_vec});
         this_cluster_reverse_index_map.insert({attr_bitset.key(0), this_cluster_reverse_index});
       }
       _cluster_attribute_data_maps.push_back(this_cluster_attribute_data_map); // add cluster attribute data map to vector of all cluster attribute data maps
+      _cluster_attribute_int_data_maps.push_back(this_cluster_attribute_int_data_map);
       _cluster_reverse_index_maps.push_back(this_cluster_reverse_index_map);
+      _cluster_attribute_int_map.push_back(this_cluster_attributes_int);
     }
 
     int n_total_index_size = 0;
@@ -553,13 +568,17 @@ class LorannBase {
 
   BitsetMatrix _attributes;
   std::vector<int> _attribute_idxs;
+  std::vector<uint32_t> _attribute_ints;
   mutable attribute_data_map _attribute_data_map;
+  mutable int32_attribute_data_map _attribute_int_data_map;
   mutable std::unordered_map<int, attribute_set> _attribute_index_map;
   mutable std::vector<attribute_data_map> _cluster_attribute_data_maps;
   mutable std::vector<attribute_data_map> _cluster_reverse_index_maps;
+  mutable std::vector<int32_attribute_data_map> _cluster_attribute_int_data_maps;
   
   /* vector of points assigned to a cluster, for each cluster */
   std::vector<std::vector<int>> _cluster_map;
+  std::vector<std::vector<uint32_t>> _cluster_attribute_int_map;
 
   Eigen::VectorXf _global_centroid_norms;
   Eigen::VectorXi _cluster_sizes;

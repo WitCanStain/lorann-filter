@@ -14,6 +14,7 @@
 #include "quant.h"
 #include "utils.h"
 #include <bitset_matrix.h>
+#include <avx_bitset.h>
 #if defined(LORANN_USE_MKL)
 #include "mkl.h"
 #elif defined(LORANN_USE_OPENBLAS)
@@ -49,9 +50,9 @@ class Lorann : public LorannBase {
    * dissimilarity measure. Defaults to false.
    * @param balanced Whether to use balanced clustering. Defaults to false.
    */
-  explicit Lorann(float *data, int m, int d, int n_clusters, int global_dim, BitsetMatrix& attributes, std::vector<int>& attribute_idxs, int rank = 32,
+  explicit Lorann(float *data, int m, int d, int n_clusters, int global_dim, BitsetMatrix& attributes, std::vector<int>& attribute_idxs, std::vector<std::uint32_t>& attribute_ints, int rank = 32,
                   int train_size = 5, bool euclidean = false, bool balanced = false) //, std::vector<std::string>* attributes, std::vector<std::string>* attribute_idxs
-      : LorannBase(data, m, d, n_clusters, global_dim, attributes, attribute_idxs, rank + 1, train_size, euclidean, balanced) {
+      : LorannBase(data, m, d, n_clusters, global_dim, attributes, attribute_idxs, attribute_ints, rank + 1, train_size, euclidean, balanced) {
     if (!(rank == 16 || rank == 32 || rank == 64)) {
       throw std::invalid_argument("rank must be 16, 32, or 64");
     }
@@ -74,7 +75,7 @@ class Lorann : public LorannBase {
    * @param dist_out The (optional) distance output array of length k
    */
   void search(const float *data, const int k, const int M, const int clusters_to_search,
-              const int points_to_rerank, int *idx_out, attribute_set& filter_attributes, std::string filter_approach, float *dist_out = nullptr, bool verbose=false) const override {
+              const int points_to_rerank, int *idx_out, attribute_set& filter_attributes, uint32_t filter_attributes_int, std::string filter_approach, float *dist_out = nullptr, bool verbose=false) const override {
     auto start_prework = std::chrono::high_resolution_clock::now();
     ColVector scaled_query;
     ColVector transformed_query;
@@ -242,17 +243,25 @@ class Lorann : public LorannBase {
       } else if (filter_approach == "prefilter") {
         auto start_prefilter = std::chrono::high_resolution_clock::now();
         cluster_attribute_data_idxs.reserve(sz);
-        attribute_data_idxs.reserve(sz);
-        attribute_data_idxs_ptr = &attribute_data_idxs;
-        cluster_attribute_data_idxs_ptr = &cluster_attribute_data_idxs;
-        for (int i = 0; i < sz; ++i) {
-          bool filters_match = _attributes.matches(_cluster_map[cluster][i], filter_attributes);
-          if (filters_match) {
-            attribute_data_idxs_ptr->push_back(_cluster_map[cluster][i]);
-            cluster_attribute_data_idxs_ptr->push_back(i);
-            matching_results_found = true;
-          }
+        attribute_data_idxs_ptr->reserve(sz);
+        std::vector<uint16_t> masks(sz);
+        std::vector<uint32_t> this_cluster_attribute_ints = _cluster_attribute_int_map[cluster];
+        int num_blocks = build_subset_masks_avx512(this_cluster_attribute_ints.data(), sz, filter_attributes_int, masks.data());
+        iterate_hits_from_masks(masks.data(), num_blocks, &cluster_attribute_data_idxs);
+        for (int i: cluster_attribute_data_idxs) {
+          attribute_data_idxs_ptr->push_back(_cluster_map[cluster][i]);
         }
+        // attribute_data_idxs_ptr = &attribute_data_idxs;
+        cluster_attribute_data_idxs_ptr = &cluster_attribute_data_idxs;
+
+        // for (int i = 0; i < sz; ++i) {
+        //   bool filters_match = _attributes.matches(_cluster_map[cluster][i], filter_attributes);
+        //   if (filters_match) {
+        //     attribute_data_idxs_ptr->push_back(_cluster_map[cluster][i]);
+        //     cluster_attribute_data_idxs_ptr->push_back(i);
+        //     matching_results_found = true;
+        //   }
+        // }
         n_filtered_cluster_datapoints = attribute_data_idxs_ptr->size();
         auto stop_prefilter = std::chrono::high_resolution_clock::now();
         auto duration_prefilter = std::chrono::duration_cast<std::chrono::microseconds>(stop_prefilter - start_prefilter);
@@ -424,46 +433,28 @@ class Lorann : public LorannBase {
     std::vector<BitsetMatrix> attribute_partition_sets;
     if (n_attribute_partitions >= 0) {
       std::vector<std::vector<int>> attr_subvecs = split_vector(_attribute_idxs, n_attribute_partitions); // partition the attributes into groups of attributes
-      // for (const auto& subvec : attr_subvecs) {
-      //   std::cout << subvec.size() << " ";
-      // }
-      int attribute_integers_per_point = (_n_attributes + sizeof(uint32_t) - 1) / sizeof(uint32_t);
-      int points_per_avx512_vector = 512 / (attribute_integers_per_point * sizeof(uint32_t));
+      // int attribute_integers_per_point = (_n_attributes + sizeof(uint32_t) - 1) / sizeof(uint32_t);
+      // int points_per_avx512_vector = 512 / (attribute_integers_per_point * sizeof(uint32_t));
       for (const auto& attr_subvec : attr_subvecs) {
         BitsetMatrix attribute_subvec_bitset;
         attribute_subvec_bitset.init(1, _n_attributes);
         for (int attribute_idx: attr_subvec) {
           attribute_subvec_bitset.set(0, attribute_idx);
         }
-        // attribute_set attribute_subvec_bitset(attr_subvec.begin(), attr_subvec.end()); // turn the attribute partition vector into a set to eliminate duplicates and enable using it as a key for map
         attribute_partition_sets.push_back(attribute_subvec_bitset);
         std::vector<int> attribute_data_idx_vec; // vector of indexes of datapoints that have at least one of the attributes in attribute_subvec_bitset
+        std::vector<uint32_t> attribute_data_attr_idx_vec; // vector of attribute integers of datapoints that have at least one of the attributes in attribute_subvec_bitset
         for (int i = 0; i<_n_samples; ++i) { // for each datapoint
-          if (_attributes.any_match(i, attribute_subvec_bitset)) attribute_data_idx_vec.push_back(i);
-          // attribute_set attribute_match = (_attributes[i] & attribute_subvec_bitset);
-          // if (attribute_match.count() > 0) {
-          //   attribute_data_idx_vec.push_back(i);
-          // }
-          // for (const auto& attr: attribute_subvec_bitset) { // for each attribute in the attribute set
-          //   if (_attributes[i].count(attr)) { // check if that datapoint has any of the current filter attributes
-          //     attribute_data_idx_vec.push_back(i); // if yes, add it to the map for the corresponding attribute set
-          //     break; // break so we do not add the same datapoint multiple times for different attributes
-          //   }
-          // }
+          if (_attributes.any_match(i, attribute_subvec_bitset)) {
+            attribute_data_idx_vec.push_back(i);
+            attribute_data_attr_idx_vec.push_back(_attribute_ints[i]);
+          }
         }
         for (int i = 0; i < _n_attributes; ++i) {
           if (attribute_subvec_bitset.is_set(0, i)) _attribute_index_map.insert({i, attribute_subvec_bitset});
         }
-        // for (std::size_t i = attribute_subvec_bitset.find_first(); i != attribute_set::npos; i = attribute_subvec_bitset.find_next(i)) {
-        //   _attribute_index_map.insert({i, attribute_subvec_bitset});
-        // }
-        // for (int i = 0; i < attribute_subvec_bitset.size(); ++i) {
-        //   if (attribute_subvec_bitset[i]) _attribute_index_map.insert({i, attribute_subvec_bitset});
-        // }
-        // for (const auto& attr: attribute_subvec_bitset) {
-        //   _attribute_index_map.insert({attr, attribute_subvec_bitset});
-        // }
         _attribute_data_map.insert({attribute_subvec_bitset.key(0), attribute_data_idx_vec});
+        _attribute_int_data_map.insert({attribute_subvec_bitset.key(0), attribute_data_attr_idx_vec});
       }
     }
 

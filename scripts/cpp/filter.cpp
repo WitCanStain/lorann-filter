@@ -9,8 +9,11 @@
 #include <chrono>
 #include <bitset_matrix.h>
 #include <H5Cpp.h>
+#include <cstdint>
+
 typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> RowMatrix;
 BitsetMatrix attribute_bitmatrix;
+std::vector<std::uint32_t> attribute_ints;
 int _n_attributes;// = attribute_strings.size(); // 30
 std::vector<int> attribute_idxs;
 std::random_device rd; // obtain a random number from hardware
@@ -41,6 +44,7 @@ RowMatrix* load_vectors(
     std::uniform_real_distribution<> selectivity_distr(0.0, 1.0);
 
     attribute_bitmatrix.init(n_input_vecs, _n_attributes);
+    attribute_ints.reserve(n_input_vecs);
     std::cout << "Using " << n_input_vecs << " input vectors." << std::endl;
 
     RowMatrix* ret_ptr = nullptr;
@@ -70,16 +74,20 @@ RowMatrix* load_vectors(
             ret_ptr = new RowMatrix(n_input_vecs, d);
 
             for (int i = 0; i < n_input_vecs; ++i) {
-                int _n_attributes_for_point = attribute_count_distr(gen);
-                bool selectivity_criterion_fulfilled = selectivity_distr(gen) < selectivity;
-                if (selectivity_criterion_fulfilled) attribute_bitmatrix.set(i, 0);
-                for (int k = 1; k < _n_attributes_for_point; ++k) {
-                    int selected_attr_idx = attribute_selector_distr(gen);
-                    attribute_bitmatrix.set(i, selected_attr_idx);
-                }
-                for (int j = 0; j < d; ++j) {
-                    (*ret_ptr)(i, j) = buffer[i * d + j];
-                }
+              int this_attribute_int = 0;
+              int _n_attributes_for_point = attribute_count_distr(gen);
+              bool selectivity_criterion_fulfilled = selectivity_distr(gen) < selectivity;
+              if (selectivity_criterion_fulfilled) attribute_bitmatrix.set(i, 0);
+              for (int k = 1; k < _n_attributes_for_point; ++k) {
+                  int selected_attr_idx = attribute_selector_distr(gen);
+                  attribute_bitmatrix.set(i, selected_attr_idx);
+                  this_attribute_int |= (1u << selected_attr_idx);
+              }
+              
+              for (int j = 0; j < d; ++j) {
+                  (*ret_ptr)(i, j) = buffer[i * d + j];
+              }
+              attribute_ints.push_back(this_attribute_int);
             }
 
             std::cout << "Loaded vectors from HDF5 file." << std::endl;
@@ -116,15 +124,16 @@ RowMatrix* load_vectors(
 
             float value;
             int j = 0;
-
+            int this_attribute_int = 0;
             int _n_attributes_for_point = attribute_count_distr(gen);
             bool selectivity_criterion_fulfilled = selectivity_distr(gen) < selectivity;
             if (selectivity_criterion_fulfilled) attribute_bitmatrix.set(i, 0);
             for (int k = 1; k < _n_attributes_for_point; ++k) {
                 int selected_attr_idx = attribute_selector_distr(gen);
                 attribute_bitmatrix.set(i, selected_attr_idx);
+                this_attribute_int |= (1u << selected_attr_idx);
             }
-
+            attribute_ints.push_back(this_attribute_int);
             while (iss >> value) {
                 (*ret_ptr)(i, j) = value;
                 ++j;
@@ -203,7 +212,7 @@ extern "C" {
       attribute_idxs.push_back(i);
     }
     std::cout << "Building the index..." << std::endl;
-    index_ptr = new Lorann::Lorann<Lorann::SQ4Quantizer>(X->data(), X->rows(), X->cols(), n_clusters, global_dim, attribute_bitmatrix, attribute_idxs,
+    index_ptr = new Lorann::Lorann<Lorann::SQ4Quantizer>(X->data(), X->rows(), X->cols(), n_clusters, global_dim, attribute_bitmatrix, attribute_idxs, attribute_ints,
                                               rank, train_size, euclidean, false);
     index_ptr->build(true, -1, n_attr_idx_partitions);
     // std::cout << "index_ptr: " << index_ptr << std::endl;
@@ -282,9 +291,11 @@ extern "C" {
     bool verbose) {
     Lorann::Lorann<Lorann::SQ4Quantizer> index = *index_ptr;
     BitsetMatrix filter_attributes;
+    uint32_t filter_attributes_int = 0;
     filter_attributes.init(1, _n_attributes);
     for (int i = 0; i<n_filter_attributes; ++i) {
       filter_attributes.set(0, int_filter_attributes[i]);
+      filter_attributes_int |= (1u << int_filter_attributes[i]);
     }
     // for (int i = 0; i < _n_attributes; ++i) {
     //   std::cout << filter_attributes.is_set(0,i);
@@ -312,7 +323,7 @@ extern "C" {
       Eigen::VectorXi approx_indices(k);
       auto start_approx = std::chrono::high_resolution_clock::now();
       try {
-        index.search((*Q_ptr).row(idxs[i]).data(), k, M, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_approach, nullptr, verbose);
+        index.search((*Q_ptr).row(idxs[i]).data(), k, M, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_attributes_int, filter_approach, nullptr, verbose);
       } catch (const std::runtime_error &e) {
         std::cout << e.what() << std::endl;
         break;

@@ -33,6 +33,11 @@ public:
         return data[dp_idx * blocks_per_bitset + block] & (Block(1) << offset);
     }
 
+    inline uint32_t get_attribute_int(size_t dp_idx) const {
+        // Assumes that n_attributes <= 32
+        return data[dp_idx * blocks_per_bitset];
+    }
+
     // inline bool matches(size_t dp_idx, const std::vector<Block>& filter) const {
     //     size_t start = dp_idx * blocks_per_bitset;
     //     for (size_t i = 0; i < blocks_per_bitset; ++i) {
@@ -116,11 +121,18 @@ public:
 
     void to_string() {
         for (int i = 0; i < n_points; ++i) {
-            for (int j = 0; j < n_attributes; ++j) {
+            for (int j = n_attributes - 1; j >= 0; --j) {
                 std::cout << is_set(i, j);
             }
-            std::cout << std::endl;
         }
+    }
+
+    std::string string_point(size_t point) const {
+        std::string out;
+        for (int j = n_attributes - 1; j >= 0; --j) {
+            out += std::to_string(is_set(point, j));
+        }
+        return out;
     }
 
     struct BitsetView {

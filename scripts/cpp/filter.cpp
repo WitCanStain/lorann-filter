@@ -10,12 +10,13 @@
 #include <bitset_matrix.h>
 #include <H5Cpp.h>
 #include <cstdint>
+#include <memory>
 
 typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> RowMatrix;
 BitsetMatrix attribute_bitmatrix;
 std::vector<std::uint32_t> attribute_ints;
-int _n_attributes;// = attribute_strings.size(); // 30
 std::vector<int> attribute_idxs;
+int _n_attributes;// = attribute_strings.size(); // 30
 std::random_device rd; // obtain a random number from hardware
 std::mt19937 gen(42); // seed the generator
 
@@ -42,9 +43,8 @@ RowMatrix* load_vectors(
     std::uniform_int_distribution<> attribute_selector_distr(1, _n_attributes - 1);
     std::uniform_int_distribution<> attribute_count_distr(1, n_attributes_per_datapoint);
     std::uniform_real_distribution<> selectivity_distr(0.0, 1.0);
-
-    attribute_bitmatrix.init(n_input_vecs, _n_attributes);
     attribute_ints.reserve(n_input_vecs);
+    attribute_bitmatrix.init(n_input_vecs, _n_attributes);
     std::cout << "Using " << n_input_vecs << " input vectors." << std::endl;
 
     RowMatrix* ret_ptr = nullptr;
@@ -77,7 +77,10 @@ RowMatrix* load_vectors(
               int this_attribute_int = 0;
               int _n_attributes_for_point = attribute_count_distr(gen);
               bool selectivity_criterion_fulfilled = selectivity_distr(gen) < selectivity;
-              if (selectivity_criterion_fulfilled) attribute_bitmatrix.set(i, 0);
+              if (selectivity_criterion_fulfilled) {
+                attribute_bitmatrix.set(i, 0);
+                this_attribute_int |= (1u << 0);
+              }
               for (int k = 1; k < _n_attributes_for_point; ++k) {
                   int selected_attr_idx = attribute_selector_distr(gen);
                   attribute_bitmatrix.set(i, selected_attr_idx);
@@ -127,7 +130,10 @@ RowMatrix* load_vectors(
             int this_attribute_int = 0;
             int _n_attributes_for_point = attribute_count_distr(gen);
             bool selectivity_criterion_fulfilled = selectivity_distr(gen) < selectivity;
-            if (selectivity_criterion_fulfilled) attribute_bitmatrix.set(i, 0);
+            if (selectivity_criterion_fulfilled) {
+              attribute_bitmatrix.set(i, 0);
+              this_attribute_int |= (1u << 0);
+            }
             for (int k = 1; k < _n_attributes_for_point; ++k) {
                 int selected_attr_idx = attribute_selector_distr(gen);
                 attribute_bitmatrix.set(i, selected_attr_idx);
@@ -144,6 +150,15 @@ RowMatrix* load_vectors(
         std::cout << "Loaded vectors from .vec text file." << std::endl;
     }
 
+    for (size_t i = 0; i < n_input_vecs; ++i) {
+        if (attribute_ints[i] != attribute_bitmatrix.get_attribute_int(i)) {
+            std::cout << "Mismatch at index " << i << ": attribute_ints = "
+                      << std::bitset<32>(attribute_ints[i])
+                      << ", bitmatrix = "
+                      << std::bitset<32>(attribute_bitmatrix.get_attribute_int(i))
+                      << std::endl;
+        }
+    }
     return ret_ptr;
 }
 
@@ -190,29 +205,28 @@ RowMatrix* load_vectors(
 //   return ret_ptr;
 // }
 
-Lorann::Lorann<Lorann::SQ4Quantizer>* index_ptr = nullptr;
-RowMatrix* Q_ptr;
+std::unique_ptr<Lorann::Lorann<Lorann::SQ4Quantizer>> index_ptr;
+std::unique_ptr<RowMatrix> Q_ptr;
 
 extern "C" {
   bool build_index(int* filter_attribute_list, int n_attributes, int n_attributes_per_datapoint, int n_attr_idx_partitions, float selectivity, int n_input_vecs, int n_clusters, int global_dim, int rank, int train_size, bool euclidean, bool use_hdf5, char* dataset_file_path) {
     std::cout << "Loading data..." << std::endl;
     std::cout << "use_hdf5: " << use_hdf5 << std::endl;
     std::cout << "dataset_file_path: " << dataset_file_path << std::endl;
+    index_ptr.reset();
+    Q_ptr.reset();
+    attribute_ints.clear();
+    attribute_idxs.clear();
     _n_attributes = n_attributes;
     RowMatrix* X = load_vectors(n_input_vecs, n_attributes_per_datapoint, selectivity, use_hdf5, dataset_file_path);
-    // size_t n_selectivity = 0;
-    // for (int i = 0; i < n_input_vecs; ++i) {
-    //   if (attribute_bitmatrix.is_set(i, 0)) ++n_selectivity;
-    // }
-    // std::cout << "Selectivity actual: " << (double)n_selectivity / n_input_vecs << std::endl;
-    Q_ptr = X;
+    Q_ptr.reset(X); // take ownership of the returned raw pointer
     // RowMatrix Q = X.topRows(1000);
     // Q_ptr =  new RowMatrix(X->topRows(100000));
     for (int i = 0; i < _n_attributes; ++i) {
       attribute_idxs.push_back(i);
     }
     std::cout << "Building the index..." << std::endl;
-    index_ptr = new Lorann::Lorann<Lorann::SQ4Quantizer>(X->data(), X->rows(), X->cols(), n_clusters, global_dim, attribute_bitmatrix, attribute_idxs, attribute_ints,
+    index_ptr = std::make_unique<Lorann::Lorann<Lorann::SQ4Quantizer>>(X->data(), X->rows(), X->cols(), n_clusters, global_dim, attribute_bitmatrix, attribute_idxs, attribute_ints,
                                               rank, train_size, euclidean, false);
     index_ptr->build(true, -1, n_attr_idx_partitions);
     // std::cout << "index_ptr: " << index_ptr << std::endl;
@@ -297,6 +311,9 @@ extern "C" {
       filter_attributes.set(0, int_filter_attributes[i]);
       filter_attributes_int |= (1u << int_filter_attributes[i]);
     }
+    std::cout << "input filter attributes: ";
+    filter_attributes.to_string();
+    std::cout << ", int: " << std::bitset<32>(filter_attributes_int) << std::endl; 
     // for (int i = 0; i < _n_attributes; ++i) {
     //   std::cout << filter_attributes.is_set(0,i);
     // }
@@ -355,7 +372,12 @@ extern "C" {
     for (const auto& approx_indices: all_approx_indices) {
       for (const auto& idx: approx_indices) {
         bool matches = attribute_bitmatrix.matches(idx, filter_attributes);
-        if (matches) approx_indices_true_matches++;
+        if (matches) {
+          approx_indices_true_matches++;
+        } else {
+          std::cout << "idx " << idx << " does not match filter attributes.\nidx attributes: " << attribute_bitmatrix.string_point(idx) << "\nFilter attributes: " << filter_attributes.string_point(0) << std::endl;
+
+        }
       }
     }
     double approx_indices_match_rate = ((double) approx_indices_true_matches) / (n_idxs*k);

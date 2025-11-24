@@ -9,7 +9,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include <vector>
-
+#include <bitset>
 #include "lorann_base.h"
 #include "quant.h"
 #include "utils.h"
@@ -160,6 +160,7 @@ class Lorann : public LorannBase {
     };
     while (cond()) {
       const int cluster = cluster_labels[i];
+      // std::cout << "cluster " << i << std::endl;
       i++;
       // validate cluster index to avoid out-of-bounds access
       if (cluster < 0 || cluster >= _n_clusters) {
@@ -211,6 +212,7 @@ class Lorann : public LorannBase {
           }
         }
         n_filtered_cluster_datapoints = attribute_data_idxs_ptr->size();
+        // std::cout << "n_filtered_cluster_datapoints indexing: " << n_filtered_cluster_datapoints << std::endl;
         // attribute_idx < sz so the indices for intra-cluster points will be off. b_filter expects indexes for the cluster, whereas it is getting indexes for a sub-cluster.
         // Need a REVERSE INDEX - mapping points of attribute_idx to the cluster point indices.
         auto stop_indexing = std::chrono::high_resolution_clock::now();
@@ -241,17 +243,46 @@ class Lorann : public LorannBase {
         // std::cout << "mixed cluster_attribute_data_idxs->size(): " << cluster_attribute_data_idxs->size() << std::endl;
         n_filtered_cluster_datapoints = cluster_attribute_data_idxs_ptr->size();
       } else if (filter_approach == "prefilter") {
+        // std::cout << "sz: " << sz << std::endl;
         auto start_prefilter = std::chrono::high_resolution_clock::now();
         cluster_attribute_data_idxs.reserve(sz);
-        attribute_data_idxs_ptr->reserve(sz);
-        std::vector<uint16_t> masks(sz);
+        attribute_data_idxs.reserve(sz);
+        // std::cout << "premask" << std::endl;
+        std::vector<uint16_t> masks(sz); //std::ceil(sz/16)
+        // std::cout << "_cluster_attribute_int_map.size(): " << _cluster_attribute_int_map.size() << std::endl;
         std::vector<uint32_t> this_cluster_attribute_ints = _cluster_attribute_int_map[cluster];
-        int num_blocks = build_subset_masks_avx512(this_cluster_attribute_ints.data(), sz, filter_attributes_int, masks.data());
-        iterate_hits_from_masks(masks.data(), num_blocks, &cluster_attribute_data_idxs);
-        for (int i: cluster_attribute_data_idxs) {
-          attribute_data_idxs_ptr->push_back(_cluster_map[cluster][i]);
+        if (this_cluster_attribute_ints.size() != sz) {
+          throw std::runtime_error("Attribute ints size mismatch in prefilter.");
         }
-        // attribute_data_idxs_ptr = &attribute_data_idxs;
+        
+        // for (auto attr_int: this_cluster_attribute_ints) {
+        //   std::cout << std::bitset<32>(attr_int) << " ";
+        // }
+        // std::cout << std::endl;
+        // std::cout << "filter_attributes_int: " << std::bitset<32>(filter_attributes_int) << std::endl;
+        int num_blocks = build_subset_masks_avx512(this_cluster_attribute_ints.data(), sz, filter_attributes_int, masks.data());
+        // std::cout << "num_blocks: " << num_blocks << std::endl;
+        // for (auto mask : masks) {
+        //   if (mask > 0) {
+        //     std::cout << "found match! " << std::endl;
+        //     std::cout << std::bitset<16>(mask) << " ";
+        //   }
+        // }
+        iterate_hits_from_masks(masks.data(), num_blocks, cluster_attribute_data_idxs);
+        // std::cout << "cluster_attribute_data_idxs.size(): " << cluster_attribute_data_idxs.size() << std::endl;
+        if (cluster_attribute_data_idxs.size() > 0) {
+            matching_results_found = true;
+            // throw("found matching results, aborting (dev)");
+        }
+        for (int i: cluster_attribute_data_idxs) {
+          bool matches = _attributes.matches(_cluster_map[cluster][i], filter_attributes);
+          if (!matches) {
+            std::cout << "Mismatch for idx " << _cluster_map[cluster][i] << ": " << _attributes.string_point(_cluster_map[cluster][i]) << " and " << filter_attributes.string_point(0) << " in prefiltering." << std::endl;
+            std::cout << "attr int: " << std::bitset<32>(this_cluster_attribute_ints[i]) << std::endl;
+          }
+          attribute_data_idxs.push_back(_cluster_map[cluster][i]);
+        }
+        attribute_data_idxs_ptr = &attribute_data_idxs;
         cluster_attribute_data_idxs_ptr = &cluster_attribute_data_idxs;
 
         // for (int i = 0; i < sz; ++i) {
@@ -263,6 +294,7 @@ class Lorann : public LorannBase {
         //   }
         // }
         n_filtered_cluster_datapoints = attribute_data_idxs_ptr->size();
+        // std::cout << "n_filtered_cluster_datapoints prefilter: " << n_filtered_cluster_datapoints << std::endl;
         auto stop_prefilter = std::chrono::high_resolution_clock::now();
         auto duration_prefilter = std::chrono::duration_cast<std::chrono::microseconds>(stop_prefilter - start_prefilter);
         total_prefilter_duration += duration_prefilter;
@@ -329,7 +361,7 @@ class Lorann : public LorannBase {
     
     auto duration_clusters = std::chrono::duration_cast<std::chrono::microseconds>(stop_clusters - start_clusters);
     std::cout << "Prefiltering stopped after " << i << " clusters searched" << std::endl;
-    std::cout << "duration_clusters: " << duration_clusters.count() << " microseconds for " << filter_approach << std::endl;
+    // std::cout << "duration_clusters: " << duration_clusters.count() << " microseconds for " << filter_approach << std::endl;
     auto duration_prework = std::chrono::duration_cast<std::chrono::microseconds>(stop_prework - start_prework);
     if (filter_approach != "postfilter" && filter_approach != "mixed" && !matching_results_found) {
       throw std::runtime_error("No matches found for filter attributes!");
@@ -351,7 +383,7 @@ class Lorann : public LorannBase {
     //   filtered_distances[i] = all_distances[i];
     // }
     Eigen::VectorXi shuffled_out(k); // why is this needed?
-    std::cout << "current_cumulative_size for " << filter_approach << ": " << current_cumulative_size << std::endl;
+    // std::cout << "current_cumulative_size for " << filter_approach << ": " << current_cumulative_size << std::endl;
     select_final(_euclidean ? data : scaled_query.data(), k, points_to_rerank, current_cumulative_size,
                  all_idxs.data(), all_distances.data(), shuffled_out.data(), dist_out);
     auto stop_postwork = std::chrono::high_resolution_clock::now();
@@ -399,9 +431,9 @@ class Lorann : public LorannBase {
     }
     auto stop_postfilter = std::chrono::high_resolution_clock::now();
     auto duration_postwork = std::chrono::duration_cast<std::chrono::microseconds>(stop_postwork - start_postwork);
-    std::cout << "duration_postwork: " << duration_postwork.count() << " microseconds for " << filter_approach << std::endl;
+    // std::cout << "duration_postwork: " << duration_postwork.count() << " microseconds for " << filter_approach << std::endl;
     auto duration_postfilter = std::chrono::duration_cast<std::chrono::microseconds>(stop_postfilter - start_postfilter);
-    std::cout << "duration_postfilter: " << duration_postfilter.count() << " microseconds for " << filter_approach << std::endl;
+    // std::cout << "duration_postfilter: " << duration_postfilter.count() << " microseconds for " << filter_approach << std::endl;
   }
   
   using LorannBase::build;

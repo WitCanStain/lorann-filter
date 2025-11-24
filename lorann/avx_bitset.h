@@ -31,14 +31,14 @@ size_t build_subset_masks_avx512(const uint32_t *a, size_t n, uint32_t q,
 }
 
 void iterate_hits_from_masks(const uint16_t *masks, size_t num_blocks,
-                             std::vector<int>* idx_out) {
+                             std::vector<int> &idx_out) {
   for (size_t b = 0; b < num_blocks; ++b) {
     unsigned mm = masks[b];
     int base = b << 4;
     while (mm) {
       unsigned i = ctz32(mm);
       mm &= mm - 1;
-      idx_out->push_back(base + i);
+      idx_out.push_back(base + i);
     //   fn(base + i);
     }
   }
@@ -63,7 +63,7 @@ int main(void) {
   build_subset_masks_avx512(data, N, q, masks);
 
   // iterate positions
-//   iterate_hits_from_masks(masks, num_blocks, print_idx);
+  // iterate_hits_from_masks(masks, num_blocks, print_idx);
 
   return 0;
 }

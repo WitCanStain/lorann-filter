@@ -444,6 +444,11 @@ class LorannBase {
         // this_cluster_attributes.push_back(_attributes[cluster[j]]);
         this_cluster_attributes_int.push_back(_attribute_ints[cluster[j]]);
       }
+      for (int k = 0; k < cluster.size(); k++) {
+        if (this_cluster_attributes_int[k] != _attributes.get_attribute_int(cluster[k])) {
+          std::cout << "cluster " << i << ", k " << k << " cluster[" << k << "] " << cluster[k] << " - mismatch" << std::endl;
+        }
+      }
       // std::cout << "Clustering cluster " << i << " with size " << cluster.size() << std::endl;
       for (BitsetMatrix& attr_bitset : attribute_partition_sets) {
         std::vector<int> attribute_data_idx_vec; // vector of indexes of datapoints that have at least one of the attributes in attribute_subvec_set

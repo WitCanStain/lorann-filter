@@ -75,7 +75,8 @@ class Lorann : public LorannBase {
    * @param dist_out The (optional) distance output array of length k
    */
   void search(const float *data, const int k, const int M, const int clusters_to_search,
-              const int points_to_rerank, int *idx_out, attribute_set& filter_attributes, uint32_t filter_attributes_int, std::string filter_approach, float *dist_out = nullptr, bool verbose=false) const override {
+              const int points_to_rerank, int *idx_out, attribute_set& filter_attributes, uint32_t filter_attributes_int, 
+              std::string filter_approach, std::chrono::microseconds* duration, float *dist_out = nullptr, bool verbose=false) const override {
     auto start_prework = std::chrono::high_resolution_clock::now();
     ColVector scaled_query;
     ColVector transformed_query;
@@ -204,8 +205,8 @@ class Lorann : public LorannBase {
         for (int i = 0; i < attribute_idx.size(); ++i) { // for each data point in the smallest index which the datapoints belong to, check if the data point has the other filter attributes as well, if yes then add to filtered list.
           bool filters_match = _attributes.matches(attribute_idx[i], filter_attributes);
           if (filters_match) {
-            attribute_data_idxs_ptr->push_back(attribute_idx[i]);
-            cluster_attribute_data_idxs_ptr->push_back(reverse_index[i]); // Need a REVERSE INDEX - mapping points of attribute_idx to the cluster point indices.
+            attribute_data_idxs.push_back(attribute_idx[i]);
+            cluster_attribute_data_idxs.push_back(reverse_index[i]); // Need a REVERSE INDEX - mapping points of attribute_idx to the cluster point indices.
           }
         }
         n_filtered_cluster_datapoints = attribute_data_idxs_ptr->size();
@@ -216,40 +217,59 @@ class Lorann : public LorannBase {
         total_filter_preloop_duration += duration_preloop;
       } if (filter_approach == "indexing_avx") {
         auto start_preloop = std::chrono::high_resolution_clock::now();
-        attribute_data_map& this_cluster_attribute_data_map = _cluster_attribute_data_maps[cluster];
+        int32_attribute_data_map& this_cluster_attribute_int_data_map = _cluster_attribute_int_data_maps[cluster];
         attribute_data_map& this_cluster_reverse_index_map = _cluster_reverse_index_maps[cluster];
-        attribute_set smallest_idx;
-        smallest_idx.init(1, _n_attributes);
+        std::vector<uint32_t> smallest_idx;
+        // smallest_idx.init(1, _n_attributes);
         int smallest_idx_size = _n_samples;
+        attribute_set* best_attr_set = nullptr;
         for (int attr = 0; attr < _n_attributes; ++attr) {
           if (filter_attributes.is_set(0, attr)) {
-            attribute_set& attr_set = _attribute_index_map[attr];
-            int attr_idx_size = this_cluster_attribute_data_map[attr_set.key(0)].size();
-            if (attr_idx_size <= smallest_idx_size) {
-              smallest_idx = attr_set;
-              smallest_idx_size = this_cluster_attribute_data_map[attr_set.key(0)].size();
-            }
+              attribute_set& attr_set = _attribute_index_map[attr];
+
+              auto& candidate = this_cluster_attribute_int_data_map[attr_set.key(0)];
+              int attr_idx_size = candidate.size();
+
+              if (attr_idx_size <= smallest_idx_size) {
+                  best_attr_set = &attr_set;              // save pointer instead of copy
+                  smallest_idx = candidate;               // TODO request: fix this copy too
+                  smallest_idx_size = attr_idx_size;
+              }
           }
         }
-        std::vector<int>& attribute_idx = this_cluster_attribute_data_map[smallest_idx.key(0)];
-        std::vector<int>& reverse_index = this_cluster_reverse_index_map[smallest_idx.key(0)];
-        attribute_data_idxs.reserve(attribute_idx.size());
-        cluster_attribute_data_idxs.reserve(attribute_idx.size());
+        // std::vector<uint32_t>& attribute_idx = this_cluster_attribute_int_data_map[smallest_idx.key(0)];
+        std::vector<int>& reverse_index = this_cluster_reverse_index_map[best_attr_set->key(0)];
+        attribute_data_idxs.reserve(smallest_idx_size);
+        cluster_attribute_data_idxs.reserve(smallest_idx_size);
         attribute_data_idxs_ptr = &attribute_data_idxs;
         cluster_attribute_data_idxs_ptr = &cluster_attribute_data_idxs;
-        total_smallest_idx_sizes += attribute_idx.size();
+        total_smallest_idx_sizes += smallest_idx_size;
         auto stop_preloop = std::chrono::high_resolution_clock::now();
         auto start_indexing = std::chrono::high_resolution_clock::now();
-        for (int i = 0; i < attribute_idx.size(); ++i) { // for each data point in the smallest index which the datapoints belong to, check if the data point has the other filter attributes as well, if yes then add to filtered list.
-          bool filters_match = _attributes.matches(attribute_idx[i], filter_attributes);
-          if (filters_match) {
-            attribute_data_idxs_ptr->push_back(attribute_idx[i]);
-            cluster_attribute_data_idxs_ptr->push_back(reverse_index[i]);
-          }
+
+        std::vector<uint16_t> masks(smallest_idx_size / 16 + 1);
+        // std::vector<uint32_t> this_cluster_attribute_ints = _cluster_attribute_int_map[cluster];
+        int num_blocks = build_subset_masks_avx512(smallest_idx.data(), smallest_idx_size, filter_attributes_int, masks.data());
+        std::vector<int> set_bit_indexes;
+        set_bit_indexes.reserve(smallest_idx_size);
+        iterate_hits_from_masks(masks.data(), num_blocks, set_bit_indexes);
+        const std::vector<int>& this_cluster = _cluster_map[cluster];
+        for (int i = 0; i < set_bit_indexes.size(); ++i) {
+          int cluster_point_idx = reverse_index[set_bit_indexes[i]];
+          attribute_data_idxs.push_back(this_cluster[cluster_point_idx]);
+          cluster_attribute_data_idxs.push_back(cluster_point_idx);
         }
+
+        // for (int i = 0; i < attribute_idx.size(); ++i) { // for each data point in the smallest index which the datapoints belong to, check if the data point has the other filter attributes as well, if yes then add to filtered list.
+        //   bool filters_match = _attributes.matches(attribute_idx[i], filter_attributes);
+        //   if (filters_match) {
+        //     attribute_data_idxs_ptr->push_back(attribute_idx[i]);
+        //     cluster_attribute_data_idxs_ptr->push_back(reverse_index[i]);
+        //   }
+        // }
         n_filtered_cluster_datapoints = attribute_data_idxs_ptr->size();
         // attribute_idx < sz so the indices for intra-cluster points will be off. b_filter expects indexes for the cluster, whereas it is getting indexes for a sub-cluster.
-        // Need a REVERSE INDEX - mapping points of attribute_idx to the cluster point indices.
+        // Need a REVERSE INDEX - mapping points of attribute_idx to the cluster point indices. Due to subcluster partitioning, cluster indices do not match with partition indices.
         auto stop_indexing = std::chrono::high_resolution_clock::now();
         auto duration_indexing = std::chrono::duration_cast<std::chrono::nanoseconds>(stop_indexing - start_indexing);
         total_filter_duration += duration_indexing;
@@ -350,12 +370,6 @@ class Lorann : public LorannBase {
                     _cluster_norms[cluster].size());
       int to_copy = use_attr_indexing ? n_filtered_cluster_datapoints : sz;
       int needed_size = current_cumulative_size + to_copy;
-      if (needed_size > all_idxs.size()) {
-        int new_size = std::max(needed_size, static_cast<int>(all_idxs.size() * 2));
-        if (new_size <= 0) new_size = needed_size; // defensive
-        all_idxs.conservativeResize(new_size);
-        all_distances.conservativeResize(new_size);
-      }
       if (use_attr_indexing) { // when we use indexing, we process fewer results than the full size of the cluster due to filtering them beforehand.
         if (n_filtered_cluster_datapoints > 0)
           std::memcpy(&all_idxs[current_cumulative_size], attribute_data_idxs_ptr->data(), n_filtered_cluster_datapoints * sizeof(int));
@@ -368,10 +382,10 @@ class Lorann : public LorannBase {
       // std::cout << "after memcpy" << std::endl;
     }
     auto stop_clusters = std::chrono::high_resolution_clock::now();
-    
-    auto duration_clusters = std::chrono::duration_cast<std::chrono::microseconds>(stop_clusters - start_clusters);
+    auto duration_filter = std::chrono::duration_cast<std::chrono::microseconds>(stop_clusters - start_clusters);
+    std::cout << "cumulative_cluster_size ratio: " << ((double) current_cumulative_size) / cumulative_cluster_size << std::endl;
     std::cout << "cluster search stopped after " << i << " clusters searched" << std::endl;
-    // std::cout << "duration_clusters: " << duration_clusters.count() << " microseconds for " << filter_approach << std::endl;
+    // std::cout << "duration_filter: " << duration_filter.count() << " microseconds for " << filter_approach << std::endl;
     auto duration_prework = std::chrono::duration_cast<std::chrono::microseconds>(stop_prework - start_prework);
     matching_results_found = cumulative_found_points > 0;
     if (filter_approach != "postfilter" && filter_approach != "mixed" && !matching_results_found) {
@@ -385,7 +399,7 @@ class Lorann : public LorannBase {
       if (filter_approach == "hybrid") std::cout << "total_hybrid_duration: " << total_hybrid_duration.count() << " microseconds" << std::endl;
       std::cout << "!! Average ratio of satisfactory points to cluster size: " << ((double) cumulative_found_points) / cumulative_cluster_size << std::endl;
       std::cout << "current_cumulative_size: " << current_cumulative_size << std::endl;
-      std::cout << "duration_clusters: " << duration_clusters.count() << " microseconds" << std::endl;
+      std::cout << "duration_filter: " << duration_filter.count() << " microseconds" << std::endl;
       std::cout << "duration_prework: " << duration_prework.count() << " microseconds" << std::endl;
       std::cout << "total_smallest_idx_sizes: " << total_smallest_idx_sizes << std::endl;
     }
@@ -411,7 +425,9 @@ class Lorann : public LorannBase {
       }
       int matched_k = matched_idxs.size();
       int new_k = k;
+      int i = 0;
       while (matched_k < k) { // if not enough datapoints are found in k results, double it and search again
+        i++;
         new_k = new_k * 2 > current_cumulative_size ? current_cumulative_size : new_k * 2;
         matched_idxs.clear();
         Eigen::VectorXi new_out(new_k);
@@ -430,6 +446,7 @@ class Lorann : public LorannBase {
           break;
         }
       }
+      std::cout << "Repeated postfilter search " << i << " times" << std::endl;
       if (verbose) std::cout << "final k: " << new_k << std::endl;
       if (matched_k >= k) {
         for (int i = 0; i < k; ++i) {
@@ -445,7 +462,12 @@ class Lorann : public LorannBase {
     auto duration_postwork = std::chrono::duration_cast<std::chrono::microseconds>(stop_postwork - start_postwork);
     // std::cout << "duration_postwork: " << duration_postwork.count() << " microseconds for " << filter_approach << std::endl;
     auto duration_postfilter = std::chrono::duration_cast<std::chrono::microseconds>(stop_postfilter - start_postfilter);
-    // std::cout << "duration_postfilter: " << duration_postfilter.count() << " microseconds for " << filter_approach << std::endl;
+    
+    if (filter_approach == "postfilter" || filter_approach == "mixed") {
+      std::cout << "duration_postfilter: " << duration_postfilter.count() << " microseconds for " << filter_approach << std::endl;
+      duration_filter += duration_postfilter;
+    }
+    if (duration) *duration = duration_filter;
   }
   
   using LorannBase::build;

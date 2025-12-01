@@ -75,7 +75,7 @@ RowMatrix* load_vectors(
 
             for (int i = 0; i < n_input_vecs; ++i) {
               int this_attribute_int = 0;
-              int _n_attributes_for_point = attribute_count_distr(gen);
+              int _n_attributes_for_point = n_attributes_per_datapoint; //attribute_count_distr(gen);
               bool selectivity_criterion_fulfilled = selectivity_distr(gen) < selectivity;
               if (selectivity_criterion_fulfilled) {
                 attribute_bitmatrix.set(i, 0);
@@ -128,7 +128,7 @@ RowMatrix* load_vectors(
             float value;
             int j = 0;
             int this_attribute_int = 0;
-            int _n_attributes_for_point = attribute_count_distr(gen);
+            int _n_attributes_for_point = n_attributes_per_datapoint; //attribute_count_distr(gen);
             bool selectivity_criterion_fulfilled = selectivity_distr(gen) < selectivity;
             if (selectivity_criterion_fulfilled) {
               attribute_bitmatrix.set(i, 0);
@@ -302,6 +302,7 @@ extern "C" {
     float* recall,
     int* approx_latency,
     int* exact_latency,
+    int* part_time,
     bool verbose) {
     Lorann::Lorann<Lorann::SQ4Quantizer> index = *index_ptr;
     BitsetMatrix filter_attributes;
@@ -311,9 +312,9 @@ extern "C" {
       filter_attributes.set(0, int_filter_attributes[i]);
       filter_attributes_int |= (1u << int_filter_attributes[i]);
     }
-    std::cout << "input filter attributes: ";
-    filter_attributes.to_string();
-    std::cout << ", int: " << std::bitset<32>(filter_attributes_int) << std::endl; 
+    // std::cout << "input filter attributes: ";
+    // filter_attributes.to_string();
+    // std::cout << ", int: " << std::bitset<32>(filter_attributes_int) << std::endl; 
     // for (int i = 0; i < _n_attributes; ++i) {
     //   std::cout << filter_attributes.is_set(0,i);
     // }
@@ -324,6 +325,7 @@ extern "C" {
     std::vector<Eigen::VectorXi> all_exact_indices(n_idxs);
     std::vector<Eigen::VectorXi> all_approx_indices(n_idxs);
     std::vector<int> bad_Recall_idxs;
+    std::chrono::microseconds duration_clusters = (std::chrono::microseconds) 0;
     for ( int i = 0; i < n_idxs; i++) {
       Eigen::VectorXi exact_indices(k);
       auto start_exact = std::chrono::high_resolution_clock::now();
@@ -334,18 +336,20 @@ extern "C" {
         break;
       }
       auto stop_exact = std::chrono::high_resolution_clock::now();
+      std::chrono::microseconds duration_cluster;
       auto duration_exact = std::chrono::duration_cast<std::chrono::microseconds>(stop_exact - start_exact);
       total_exact_duration = total_exact_duration + duration_exact;
       all_exact_indices.push_back(exact_indices);
       Eigen::VectorXi approx_indices(k);
       auto start_approx = std::chrono::high_resolution_clock::now();
       try {
-        index.search((*Q_ptr).row(idxs[i]).data(), k, M, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_attributes_int, filter_approach, nullptr, verbose);
+        index.search((*Q_ptr).row(idxs[i]).data(), k, M, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_attributes_int, filter_approach, &duration_cluster, nullptr, verbose);
       } catch (const std::runtime_error &e) {
         std::cout << e.what() << std::endl;
         break;
       }
       auto stop_approx = std::chrono::high_resolution_clock::now();
+      duration_clusters = duration_clusters + duration_cluster;
       auto duration_approx = std::chrono::duration_cast<std::chrono::microseconds>(stop_approx - start_approx);
       total_approx_duration = total_approx_duration + duration_approx;
       all_approx_indices.push_back(approx_indices);
@@ -384,6 +388,7 @@ extern "C" {
     if (approx_indices_match_rate < 1) std::cout << "Approximate indices match rate: " << ((double) approx_indices_true_matches) / (n_idxs*k) << std::endl;
     std::chrono::microseconds avg_exact_duration = total_exact_duration / n_idxs;
     std::chrono::microseconds avg_approx_duration = total_approx_duration / n_idxs;
+    std::chrono::microseconds avg_cluster_duration = duration_clusters / n_idxs;
     // std::cout << "Average exact query duration: " << avg_exact_duration.count() << " microseconds" << std::endl;
     // std::cout << "Average approx query duration: " << avg_approx_duration.count() << " microseconds" << std::endl;
     float sum = 0;
@@ -401,137 +406,12 @@ extern "C" {
     *recall = avg_recall;
     *approx_latency = avg_approx_duration.count();
     *exact_latency = avg_exact_duration.count();
+    *part_time = avg_cluster_duration.count();
     return avg_recall;
   }
 }
 
-// extern "C" {
-//   float fast_filter_wrapper_profiled(
-//     int* idxs,
-//     int n_idxs,
-//     int k,
-//     int clusters_to_search,
-//     int points_to_rerank,
-//     const char** string_filter_attributes,
-//     int n_filter_attributes,
-//     const char* filter_approach,
-//     const char* exact_search_approach,
-//     float* recall,
-//     int* approx_latency,
-//     int* exact_latency) {
-//     Lorann::Lorann<Lorann::SQ4Quantizer> index = *index_ptr;
-//     BitsetMatrix filter_attributes;
-//     filter_attributes.init(1, n_attributes);
-//     // std::cout << "n_filter_attributes: " << n_filter_attributes << std::endl;
-//     for (int i = 0; i<n_filter_attributes; ++i) {
-//       auto it = std::find(attribute_strings.begin(), attribute_strings.end(), string_filter_attributes[i]);
-//       int filter_idx = it - attribute_strings.begin();
-//       filter_attributes.set(0, filter_idx);
-//     }
-//     // for (int i = 0; i < n_attributes; ++i) {
-//     //   std::cout << filter_attributes.is_set(0,i);
-//     // }
-//     std::cout << std::endl;
-//     std::vector<float> recall_vec(n_idxs);
-//     std::chrono::microseconds total_exact_duration = (std::chrono::microseconds) 0;
-//     std::chrono::microseconds total_approx_duration = (std::chrono::microseconds) 0;
-//     std::cout << "Beginning querying..." << std::endl;
-//     std::vector<Eigen::VectorXi> all_exact_indices(n_idxs);
-//     std::vector<Eigen::VectorXi> all_approx_indices(n_idxs);
-//     std::vector<int> bad_Recall_idxs;
-//     for ( int i = 0; i < n_idxs; i++) {
-//       Eigen::VectorXi exact_indices(k);
-//       auto start_exact = std::chrono::high_resolution_clock::now();
-//       try {
-//         index.exact_search((*Q_ptr).row(idxs[i]).data(), k, exact_indices.data(), filter_attributes, exact_search_approach);
-//       } catch (const std::runtime_error &e) {
-//         std::cout << e.what() << std::endl;
-//         break;
-//       }
-//       auto stop_exact = std::chrono::high_resolution_clock::now();
-//       auto duration_exact = std::chrono::duration_cast<std::chrono::microseconds>(stop_exact - start_exact);
-//       total_exact_duration = total_exact_duration + duration_exact;
-//       all_exact_indices.push_back(exact_indices);
-//       Eigen::VectorXi approx_indices(k);
-//       auto start_approx = std::chrono::high_resolution_clock::now();
-//       try {
-//         index.search((*Q_ptr).row(idxs[i]).data(), k, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_approach, nullptr, true);
-//       } catch (const std::runtime_error &e) {
-//         std::cout << e.what() << std::endl;
-//         break;
-//       }
-//       auto stop_approx = std::chrono::high_resolution_clock::now();
-//       auto duration_approx = std::chrono::duration_cast<std::chrono::microseconds>(stop_approx - start_approx);
-//       total_approx_duration = total_approx_duration + duration_approx;
-//       all_approx_indices.push_back(approx_indices);
-//       std::vector<int> res_union = findUnion(exact_indices, approx_indices);
-//       float recall = res_union.size()/float(k);
-//       if (recall < 0.1) bad_Recall_idxs.push_back(idxs[i]); //std::cout << "ALERT Recall: " << recall << " for query index " << idxs[i] << std::endl;
-//       recall_vec[i] = recall;
-//       // std::cout << "idx: " << idxs[i] << std::endl;
-//       // std::cout << "exact indices:" << std::endl;
-//       // std::cout << exact_indices.transpose() << std::endl;
-//       // std::cout << "approx indices:" << std::endl;
-//       // std::cout << approx_indices.transpose() << std::endl;
-//     }
-//     int exact_indices_true_matches = 0;
-//     for (const auto& exact_indices: all_exact_indices) {
-//       for (const auto& idx: exact_indices) {
-//         bool matches = attribute_bitmatrix.matches(idx, filter_attributes);
-//         if (matches) exact_indices_true_matches++;
-//       }
-//     }
-//     double exact_indices_match_rate = ((double) exact_indices_true_matches) / (n_idxs*k);
-//     if (exact_indices_match_rate < 1) std::cout << "Exact indices match rate: " << exact_indices_match_rate<< std::endl;
-//     int approx_indices_true_matches = 0;
-//     for (const auto& approx_indices: all_approx_indices) {
-//       for (const auto& idx: approx_indices) {
-//         bool matches = attribute_bitmatrix.matches(idx, filter_attributes);
-//         if (matches) approx_indices_true_matches++;
-//       }
-//     }
-//     double approx_indices_match_rate = ((double) approx_indices_true_matches) / (n_idxs*k);
-//     if (approx_indices_match_rate < 1) std::cout << "Approximate indices match rate: " << ((double) approx_indices_true_matches) / (n_idxs*k) << std::endl;
-//     std::chrono::microseconds avg_exact_duration = total_exact_duration / n_idxs;
-//     std::chrono::microseconds avg_approx_duration = total_approx_duration / n_idxs;
-//     std::cout << "Average exact query duration: " << avg_exact_duration.count() << " microseconds" << std::endl;
-//     std::cout << "Average approx query duration: " << avg_approx_duration.count() << " microseconds" << std::endl;
-//     float sum = 0;
-//     for (size_t i = 0; i < n_idxs; ++i) {
-//       // std::cout << "recall: " << recall_vec[i] << std::endl;
-//       sum += recall_vec[i];
-//     }
-//     float avg_recall = sum / n_idxs;
-//     // std::cout << "average recall: " << avg_recall << std::endl;
-//     // std::cout << "[";
-//     // for (const auto& idx : bad_Recall_idxs) {
-//     //   std::cout << idx << ", ";
-//     // }
-//     // std::cout << "]";
-//     *recall = avg_recall;
-//     std::cout << "avg_recall c++: " << avg_recall;
-//     *approx_latency = avg_approx_duration.count();
-//     *exact_latency = avg_exact_duration.count();
-//     return avg_recall;
-//   }
-// }
 
-// extern "C" {
-//   int filter_proc(int n_attr_idx_partitions, int n_input_vecs, int n_clusters, int global_dim, int rank, int train_size, bool euclidean, int* idxs, int n_idxs, bool exact_search, int k,  int clusters_to_search, int points_to_rerank, const char* filter_attribute, const char* filter_approach) {
-//     bool idx_built = build_index(n_attr_idx_partitions, n_input_vecs, n_clusters, global_dim, rank, train_size, euclidean);
-//     std::vector<float> results(n_idxs);
-//     for ( int i = 0; i < n_idxs; ++i) {
-//       results[i] = filter(idxs[i], exact_search, k, clusters_to_search, points_to_rerank, filter_attribute, filter_approach);
-//     }
-//     float sum = 0;
-//     for (size_t i = 0; i < n_idxs; ++i) {
-//       sum += results[i];
-//     }
-//     float avg_recall = sum / n_idxs;
-//     std::cout << "average recall: " << avg_recall << std::endl;
-//     return 0;
-//   }
-// }
 
 // int main() {
 //   bool idx = build_index(10, 100000, 1024, 256, 32, 5, true);

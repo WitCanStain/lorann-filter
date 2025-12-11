@@ -295,6 +295,25 @@ class Lorann : public LorannBase {
         }
         attribute_data_idxs_ptr = &this_cluster_attribute_data_map[smallest_idx.key(0)];
         cluster_attribute_data_idxs_ptr = &this_cluster_reverse_index_map[smallest_idx.key(0)];
+        // 
+        const std::vector<int>& this_cluster = _cluster_map[cluster];
+        int filter_matches = 0;
+        for (int i = 0; i < sz; ++i) {
+          bool filters_match = _attributes.matches(this_cluster[i], filter_attributes);
+          if (filters_match) {
+            filter_matches++;
+          }
+        }
+        std::vector<int> temp_attribute_data_idxs = this_cluster_attribute_data_map[smallest_idx.key(0)];
+        int idx_filter_matches = 0;
+        for (int i = 0; i < temp_attribute_data_idxs.size(); ++i) {
+          bool filters_match = _attributes.matches(temp_attribute_data_idxs[i], filter_attributes);
+          if (filters_match) {
+            idx_filter_matches++;
+          }
+        }
+        std::cout << "cluster " << cluster << " filter_matches: " << filter_matches << "/" << sz << ", idx_filter_matches: " << idx_filter_matches << "/" << temp_attribute_data_idxs.size() << std::endl;
+        //
         n_filtered_cluster_datapoints = cluster_attribute_data_idxs_ptr->size();
       } else if (filter_approach == "hybrid_avx") {
         auto start_hybrid_avx = std::chrono::high_resolution_clock::now();
@@ -464,6 +483,7 @@ class Lorann : public LorannBase {
     auto duration_postfilter = std::chrono::duration_cast<std::chrono::microseconds>(stop_postfilter - start_postfilter);
     
     if (filter_approach == "postfilter" || filter_approach == "mixed") {
+      std::cout << "duration_filter: " << duration_filter.count() << " microseconds for " << filter_approach << std::endl;
       std::cout << "duration_postfilter: " << duration_postfilter.count() << " microseconds for " << filter_approach << std::endl;
       duration_filter += duration_postfilter;
     }

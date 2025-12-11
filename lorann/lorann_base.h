@@ -2,7 +2,7 @@
 
 #include <stdexcept>
 #include <vector>
-
+#include <avx_bitset.h>
 #include "clustering.h"
 #include "serialization.h"
 #include "utils.h"
@@ -143,7 +143,7 @@ class LorannBase {
    * @param out The index output array of length k
    * @param dist_out The (optional) distance output array of length k
    */
-  void exact_search(const float *q, int k, int *out, const attribute_set& filter_attributes, std::string filter_approach, float *dist_out = nullptr) const {
+  void exact_search(const float *q, int k, int *out, const attribute_set& filter_attributes, uint32_t filter_attributes_int,std::string filter_approach, float *dist_out = nullptr) const {
     float *data_ptr = _data;
     int n_datapoints;
     std::vector<int> attribute_data_idxs;
@@ -160,23 +160,6 @@ class LorannBase {
           }
         }
       }
-      
-      // for (std::size_t attr = filter_attributes.find_first(); attr != attribute_set::npos; attr = filter_attributes.find_next(attr)) {
-      //   attribute_set& attr_set = _attribute_index_map[attr];
-      //   int attr_idx_size = _attribute_data_map[attr_set].size();
-      //   if (attr_idx_size <= smallest_idx_size) {
-      //     smallest_idx = attr_set;
-      //     smallest_idx_size = _attribute_data_map[smallest_idx].size();
-      //   }
-      // }
-      // for (const auto& attr: filter_attributes) {
-      //   attribute_set attr_set = _attribute_index_map[attr];
-      //   int attr_idx_size = _attribute_data_map[attr_set].size();
-      //   if (attr_idx_size <= smallest_idx_size) {
-      //     smallest_idx = attr_set;
-      //     smallest_idx_size = _attribute_data_map[smallest_idx].size();
-      //   }
-      // }
       std::vector<int>& attribute_idx = _attribute_data_map[smallest_idx.key(0)];
       attribute_data_idxs.reserve(attribute_idx.size());
       for (int i = 0; i < attribute_idx.size(); ++i) { // for each data point in the smallest index which the datapoints belong to, check if the data point has the other filter attributes as well, if yes then add to filtered list.
@@ -205,18 +188,20 @@ class LorannBase {
       auto start_filter = std::chrono::high_resolution_clock::now();
       for (int i = 0; i < _n_samples; i++) {
         bool filters_match = _attributes.matches(i, filter_attributes);
-        // bool filters_match = (_attributes[i] & filter_attributes) == filter_attributes;
-        // for (const auto& attribute: filter_attributes) {
-        //   if (!_attributes[i].count(attribute)) {
-        //     all_found = false;
-        //   }
-        // }
         if (filters_match) attribute_data_idxs.push_back(i);
       }
       n_datapoints = attribute_data_idxs.size();
       auto stop_filter = std::chrono::high_resolution_clock::now();
       auto duration_filter = std::chrono::duration_cast<std::chrono::microseconds>(stop_filter - start_filter);
         // std::cout << "duration_filter loop: " << duration_filter.count() << " microseconds" << std::endl;
+    } else if (filter_approach == "prefilter_avx") {
+      auto start_filter = std::chrono::high_resolution_clock::now();
+      std::vector<uint16_t> masks(_n_samples);
+      int num_blocks = build_subset_masks_avx512(_attribute_ints.data(), _n_samples, filter_attributes_int, masks.data());
+      iterate_hits_from_masks(masks.data(), num_blocks, attribute_data_idxs);
+      n_datapoints = attribute_data_idxs.size();
+      auto stop_filter = std::chrono::high_resolution_clock::now();
+      auto duration_filter = std::chrono::duration_cast<std::chrono::microseconds>(stop_filter - start_filter);
     } else if (filter_approach == "postfilter") {
       n_datapoints = _n_samples;
     } else {

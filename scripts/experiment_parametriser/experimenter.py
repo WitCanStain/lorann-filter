@@ -4,6 +4,7 @@ import pathlib
 from numpy.ctypeslib import ndpointer
 import numpy as np
 import time
+import math
 import random
 import matplotlib.pyplot as plt
 from labellines import labelLines
@@ -26,7 +27,7 @@ results_file_name = "1m-gist-progressive-experimental_results-" + todays_time + 
 
 if __name__ == "__main__":
     # Load the shared library into ctypes
-    random.seed(41)
+    random.seed(42)
     script_dir = pathlib.Path(__file__).resolve().parent
     libname = script_dir.parent / "cpp" / "libfilter.so"
     c_lib = ctypes.CDLL(libname)
@@ -91,19 +92,19 @@ if __name__ == "__main__":
         # "euclidean": True,
         # "dataset_file": dataset_file,
         # },
-        {
-        "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-        "n_attributes_per_datapoint": 10,
-        "n_attr_idx_partitions": 10,
-        "n_input_vecs": n_input_vecs,
-        "n_clusters": 1024,
-        "global_dim": 256,
-        "rank": 32,
-        "train_size": 5,
-        "a0_selectivity": 0.01,
-        "euclidean": True,
-        "dataset_file": dataset_file,
-        },
+        # {
+        # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
+        # "n_attributes_per_datapoint": 10,
+        # "n_attr_idx_partitions": 10,
+        # "n_input_vecs": n_input_vecs,
+        # "n_clusters": 1024,
+        # "global_dim": 256,
+        # "rank": 32,
+        # "train_size": 5,
+        # "a0_selectivity": 0.01,
+        # "euclidean": True,
+        # "dataset_file": dataset_file,
+        # },
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
         # "n_attributes_per_datapoint": 10,
@@ -158,10 +159,10 @@ if __name__ == "__main__":
         # },
         {
         "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-        "n_attributes_per_datapoint": 10,
+        "n_attributes_per_datapoint": 5,
         "n_attr_idx_partitions": 10,
         "n_input_vecs": n_input_vecs,
-        "n_clusters": 1024,
+        "n_clusters": int(math.sqrt(n_input_vecs)),
         "global_dim": 256,
         "rank": 32,
         "train_size": 5,
@@ -182,19 +183,19 @@ if __name__ == "__main__":
         # "euclidean": True,
         # "dataset_file": dataset_file,
         # },
-        {
-        "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-        "n_attributes_per_datapoint": 10,
-        "n_attr_idx_partitions": 10,
-        "n_input_vecs": n_input_vecs,
-        "n_clusters": 1024,
-        "global_dim": 256,
-        "rank": 32,
-        "train_size": 5,
-        "a0_selectivity": 0.7,
-        "euclidean": True,
-        "dataset_file": dataset_file,
-        },
+        # {
+        # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
+        # "n_attributes_per_datapoint": 10,
+        # "n_attr_idx_partitions": 10,
+        # "n_input_vecs": n_input_vecs,
+        # "n_clusters": 1024,
+        # "global_dim": 256,
+        # "rank": 32,
+        # "train_size": 5,
+        # "a0_selectivity": 0.7,
+        # "euclidean": True,
+        # "dataset_file": dataset_file,
+        # },
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
         # "n_attributes_per_datapoint": 10,
@@ -221,49 +222,49 @@ if __name__ == "__main__":
         # "euclidean": True,
         # "dataset_file": dataset_file,
         # },
-        {
-        "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-        "n_attributes_per_datapoint": 10,
-        "n_attr_idx_partitions": 10,
-        "n_input_vecs": n_input_vecs,
-        "n_clusters": 1024,
-        "global_dim": 256,
-        "rank": 32,
-        "train_size": 5,
-        "a0_selectivity": 0.99,
-        "euclidean": True,
-        "dataset_file": dataset_file,
-        },
+        # {
+        # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
+        # "n_attributes_per_datapoint": 10,
+        # "n_attr_idx_partitions": 10,
+        # "n_input_vecs": n_input_vecs,
+        # "n_clusters": 1024,
+        # "global_dim": 256,
+        # "rank": 32,
+        # "train_size": 5,
+        # "a0_selectivity": 0.99,
+        # "euclidean": True,
+        # "dataset_file": dataset_file,
+        # },
     ]
     
-    index_param_sets = []
-    n_index_param_sets = 4
-    n_clusters = 560
-    for i in range(0, n_index_param_sets):
-        if i == 0:
-            selectivity = 0.01
-        elif i == n_index_param_sets - 1:
-            selectivity = 0.99
-        else:
-            selectivity = (1 / n_index_param_sets) * i
-        index_param_set = {
-            "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-            "n_attributes_per_datapoint": 10,
-            "n_attr_idx_partitions": 10,
-            "n_input_vecs": n_input_vecs,
-            "n_clusters": n_clusters,
-            "global_dim": 256,
-            "rank": 32,
-            "train_size": 5,
-            "a0_selectivity": selectivity,
-            "euclidean": True,
-            "dataset_file": dataset_file,
-        }
-        index_param_sets.append(index_param_set)
+    # index_param_sets = []
+    # n_index_param_sets = 7
+    # n_clusters = int(math.sqrt(n_input_vecs))
+    # for i in range(0, n_index_param_sets):
+    #     if i == 0:
+    #         selectivity = 0.01
+    #     elif i == n_index_param_sets - 1:
+    #         selectivity = 0.99
+    #     else:
+    #         selectivity = (1 / n_index_param_sets) * i
+    #     index_param_set = {
+    #         "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
+    #         "n_attributes_per_datapoint": 10,
+    #         "n_attr_idx_partitions": 16,
+    #         "n_input_vecs": n_input_vecs,
+    #         "n_clusters": n_clusters,
+    #         "global_dim": 256,
+    #         "rank": 32,
+    #         "train_size": 5,
+    #         "a0_selectivity": selectivity,
+    #         "euclidean": True,
+    #         "dataset_file": dataset_file,
+    #     }
+    #     index_param_sets.append(index_param_set)
     
     query_indices = [random.randint(0, n_input_vecs) for i in range(3)]#[399529, 241926, 958223, 402175, 893348, 9781, 819157, 880067, 460738, 758298, 334374, 2102422, 650928, 612145, 125639, 453611, 881900, 226359, 76249, 498268, 131075, 702495, 19438, 129779, 722313, 944585, 279510, 333237, 650012, 190935, 930905, 316057, 418856, 111895, 98062, 695562, 517225, 241595, 22717, 81649, 763585]
     search_param_sets = []
-    for filter_approach in ["hybrid_avx", "indexing_avx", "mixed", "postfilter"]:#, "indexing", "mixed", "postfilter"
+    for filter_approach in ["hybrid_avx", "hybrid"]:#, "indexing", "mixed", "postfilter" "hybrid_avx", "indexing_avx",
         initial_M = 50
         M_increment = 150
         initial_clusters_to_search = 1
@@ -271,12 +272,12 @@ if __name__ == "__main__":
         for i in range(10):
             search_params = {
                 "clusters_to_search": 0,
-                "points_to_rerank": 20000,
+                "points_to_rerank": 2000,
                 "k": 10,
                 "M": initial_M + (i * M_increment) if filter_approach != "postfilter" else -1,
                 "filter_attributes": [0],
                 "filter_approach": filter_approach,
-                "exact_search_approach": "prefilter",
+                "exact_search_approach": "prefilter_avx",
                 "n_repeat_runs": 1,
                 "query_indices": query_indices,
                 "label": filter_approach
@@ -416,7 +417,7 @@ if __name__ == "__main__":
         ax.set_title(f"Log Latency, Recall, and {index_param_set["a0_selectivity"]:.3} Selectivity ({n_input_vecs} points)")
         ax.set_ylabel("Latency (μs)")
         ax.set_xlabel("Recall")
-        # fig.savefig(f"../../figures/1m-gist-nov18-recall-latency_a0{index_param_set["a0_selectivity"]}_progressive.png")
+        fig.savefig(f"../../figures/1m-gist-dec12-recall-latency_a0{index_param_set["a0_selectivity"]}_prefilter_avx2.png")
     plt.show()
 
 

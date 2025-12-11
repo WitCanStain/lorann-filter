@@ -234,59 +234,6 @@ extern "C" {
   }
 }
 
-// extern "C" {
-//   /**
-//    * filter_approach one of "prefilter", "postfilter", "indexing"
-//    */
-// float filter(int q_idx, bool exact_search, int k,  int clusters_to_search, int points_to_rerank, const char* filter_attribute, const char* filter_approach) {
-//   if (index_ptr == nullptr) {
-//     std::cout << "Index has not been initialised. Aborting..." << std::endl;
-//     return 0;
-//   }
-//   Lorann::Lorann<Lorann::SQ4Quantizer> index = *index_ptr;
-//   RowMatrix Q = (*Q_ptr).topRows(1000);
-//   auto it = std::find(attribute_strings.begin(), attribute_strings.end(), filter_attribute);
-//   int filter_idx = it - attribute_strings.begin();
-//   BitsetMatrix filter_attributes;
-//   filter_attributes.init(1, n_attributes);
-//   filter_attributes.set(0, filter_idx);
-//   Eigen::VectorXi exact_indices(k);
-//   Eigen::VectorXi approx_indices(k);
-//   index.exact_search((*Q_ptr).row(q_idx).data(), k, exact_indices.data(), filter_attributes, filter_approach);
-//   bool verbose = false;
-//   index.search((*Q_ptr).row(q_idx).data(), k, clusters_to_search, points_to_rerank, approx_indices.data(), filter_attributes, filter_approach, nullptr, verbose);
-//   std::vector<int> res_union = findUnion(exact_indices, approx_indices);
-//   float recall = res_union.size()/float(k);
-//   return recall;
-// }
-// }
-
-// extern "C" {
-//   float filter_wrapper(int* idxs, int n_idxs, bool exact_search, int k,  int clusters_to_search, int points_to_rerank, const char* filter_attribute, const char* filter_approach) {
-
-//     std::vector<float> results(n_idxs);
-//     std::chrono::microseconds total_duration = (std::chrono::microseconds)0;
-//     for ( int i = 0; i < n_idxs; i++) {
-//       auto start = std::chrono::high_resolution_clock::now();
-//       results[i] = filter(idxs[i], exact_search, k, clusters_to_search, points_to_rerank, filter_attribute, filter_approach);
-//       auto stop = std::chrono::high_resolution_clock::now();
-//       auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-//       total_duration = total_duration + duration;
-//       // std::cout << "loop duration: " << duration.count() << " ms"<< std::endl;
-//     }
-//     std::chrono::microseconds avg_duration = total_duration / n_idxs;
-//     std::cout << "Average query duration: " << avg_duration.count() << " microseconds" << std::endl;
-//     float sum = 0;
-//     for (size_t i = 0; i < n_idxs; ++i) {
-//       sum += results[i];
-//     }
-//     float avg_recall = sum / n_idxs;
-//     std::cout << "average recall: " << avg_recall << " microseconds" << std::endl;
-//     return avg_recall;
-//   }
-// }
-
-
 extern "C" {
   float fast_filter_wrapper_profiled(
     int* idxs,
@@ -330,7 +277,7 @@ extern "C" {
       Eigen::VectorXi exact_indices(k);
       auto start_exact = std::chrono::high_resolution_clock::now();
       try {
-        index.exact_search((*Q_ptr).row(idxs[i]).data(), k, exact_indices.data(), filter_attributes, exact_search_approach);
+        index.exact_search((*Q_ptr).row(idxs[i]).data(), k, exact_indices.data(), filter_attributes, filter_attributes_int, exact_search_approach);
       } catch (const std::runtime_error &e) {
         std::cout << e.what() << std::endl;
         break;

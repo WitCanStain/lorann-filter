@@ -1,4 +1,5 @@
 // gcc/clang:  -O3 -mavx512f -mbmi -mpopcnt
+#pragma once
 #include <immintrin.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -30,7 +31,7 @@ size_t build_subset_masks_avx512(const uint32_t *a, size_t n, uint32_t q,
   return num_blocks;
 }
 
-void iterate_hits_from_masks(const uint16_t *masks, size_t num_blocks,
+inline void iterate_hits_from_masks(const uint16_t *masks, size_t num_blocks,
                              std::vector<int> &idx_out) {
   for (size_t b = 0; b < num_blocks; ++b) {
     unsigned mm = masks[b];
@@ -39,7 +40,6 @@ void iterate_hits_from_masks(const uint16_t *masks, size_t num_blocks,
       unsigned i = ctz32(mm);
       mm &= mm - 1;
       idx_out.push_back(base + i);
-    //   fn(base + i);
     }
   }
 }
@@ -48,22 +48,22 @@ void iterate_hits_from_masks(const uint16_t *masks, size_t num_blocks,
 #include <stdio.h>
 static void print_idx(size_t idx) { printf("%zu\n", idx); }
 
-int main(void) {
-  enum { N = 1 << 20 };
-  static uint32_t data[N];
-  for (size_t i = 0; i < N; i++)
-    if (i % 12345 == 0)
-      data[i] = 0xF; // demo init
+// int main(void) {
+//   enum { N = 1 << 20 };
+//   static uint32_t data[N];
+//   for (size_t i = 0; i < N; i++)
+//     if (i % 12345 == 0)
+//       data[i] = 0xF; // demo init
 
-  uint32_t q = 0x5;
+//   uint32_t q = 0x5;
 
-  // make mask vector
-  size_t num_blocks = (N + 15) >> 4;
-  static uint16_t masks[((1 << 20) + 15) >> 4];
-  build_subset_masks_avx512(data, N, q, masks);
+//   // make mask vector
+//   size_t num_blocks = (N + 15) >> 4;
+//   static uint16_t masks[((1 << 20) + 15) >> 4];
+//   build_subset_masks_avx512(data, N, q, masks);
 
-  // iterate positions
-  // iterate_hits_from_masks(masks, num_blocks, print_idx);
+//   // iterate positions
+//   // iterate_hits_from_masks(masks, num_blocks, print_idx);
 
-  return 0;
-}
+//   return 0;
+// }

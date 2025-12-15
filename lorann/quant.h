@@ -4,7 +4,7 @@
 
 namespace Lorann {
 
-#if false //defined(__AVX2__)
+#if defined(__AVX2__)
 
 #define MM256_SET_M128I(a, b) _mm256_insertf128_si256(_mm256_castsi128_si256(b), (a), 1)
 #define MM512_SET_M256I(a, b) _mm512_inserti64x4(_mm512_castsi256_si512(b), (a), 1)
@@ -139,7 +139,7 @@ struct SQ4Quantizer : SQQuantizer {
   static constexpr int compensation_factor = 8;
   static constexpr int div_factor = 2;
 
-#if false //defined(__AVX2__)
+#if defined(__AVX2__)
 
   inline void matvec_product_A(const uint8_t *A, const int8_t *x, float *result, const size_t rows,
                                const size_t cols) const {
@@ -176,24 +176,78 @@ struct SQ4Quantizer : SQQuantizer {
     }
   }
 
-  void matvec_product_B_16_filter(const uint8_t *A, const int8_t *x, float *result,
-                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
+  void matvec_product_B_16_filter(
+    const uint8_t *B, 
+    const int8_t *x, 
+    float *result,
+    const size_t rows, 
+    std::vector<int>* idxs) const 
+  {
     const __m128i vec_chunk = _mm_loadu_si128((const __m128i *)(x));
-    for (size_t j = 0; j < cols; ++j) {
-      const __m128i col_chunk = unpack128(A + j * 8);
+    for (size_t j = 0; j < idxs->size(); ++j) {
+      const __m128i col_chunk = unpack128(B + j * 8);
       const __m128i sum = dpbusd(col_chunk, vec_chunk);
       result[j] = horizontal_add(sum);
     }
   }
 
-  void matvec_product_B_32_filter(const uint8_t *A, const int8_t *x, float *result,
-                                  const size_t rows, const size_t cols, std::vector<int>* idxs) const {
-    const __m256i vec_chunk = _mm256_loadu_si256((const __m256i *)(x));
-    for (size_t j = 0; j < cols; ++j) {
-      const __m256i col_chunk = unpack256(A + j * 16);
-      const __m256i sum = dpbusd(col_chunk, vec_chunk);
-      result[j] = horizontal_add(sum);
-    }
+  // void matvec_product_B_32_filter(const uint8_t *A, const int8_t *x, float *result,
+  //                                 const size_t rows, const size_t cols, std::vector<int>* idxs) const {
+  //   const __m256i vec_chunk = _mm256_loadu_si256((const __m256i *)(x));
+  //   for (size_t j = 0; j < cols; ++j) {
+  //     const __m256i col_chunk = unpack256(A + j * 16);
+  //     const __m256i sum = dpbusd(col_chunk, vec_chunk);
+  //     result[j] = horizontal_add(sum);
+  //   }
+  // }
+
+  inline void matvec_product_B_32_filter(
+    const uint8_t *B, 
+    const int8_t *x, 
+    float *result,
+    const size_t rows, 
+    std::vector<int>* idxs) const
+  {
+
+    
+      const __m256i vec_chunk =
+          _mm256_loadu_si256(reinterpret_cast<const __m256i*>(x));
+
+      const int* __restrict__ idp = idxs->data();
+      const size_t n = idxs->size();
+      // If you expect idxs to be “somewhat random”, prefetch can help a bit.
+      // Tune PDIST per CPU; 4–16 is a reasonable starting range.
+      constexpr int PDIST = 8;
+
+      size_t j = 0;
+
+      // Optional 2x unroll for more ILP
+      for (; j + 1 < n; j += 2) {
+          const size_t c0 = static_cast<size_t>(idp[j + 0]);
+          const size_t c1 = static_cast<size_t>(idp[j + 1]);
+
+          if (j + PDIST < n) {
+              _mm_prefetch(reinterpret_cast<const char*>(B + static_cast<size_t>(idp[j + PDIST]) * 16),
+                          _MM_HINT_T0);
+          }
+
+          const __m256i col0 = unpack256(B + c0 * 16);
+          const __m256i col1 = unpack256(B + c1 * 16);
+
+          const __m256i sum0 = dpbusd(col0, vec_chunk);
+          const __m256i sum1 = dpbusd(col1, vec_chunk);
+
+          result[j + 0] = horizontal_add(sum0);
+          result[j + 1] = horizontal_add(sum1);
+      }
+
+      // tail
+      for (; j < n; ++j) {
+          const size_t c = static_cast<size_t>(idp[j]);
+          const __m256i col = unpack256(B + c * 16);
+          const __m256i sum = dpbusd(col, vec_chunk);
+          result[j] = horizontal_add(sum);
+      }
   }
 
 #if defined(__AVXVNNI__) || (defined(__AVX512VNNI__) && defined(__AVX512VL__))
@@ -522,12 +576,12 @@ struct SQ4Quantizer : SQQuantizer {
     const int rank = qA.rows() * 2;
     if (rank == 32)
       matvec_product_B_32_filter(qA.data(), v.data(), result, rank, idxs);
-    else if (rank == 16)
-      matvec_product_B_16_filter(qA.data(), v.data(), result, rank, idxs);
-    else
-      matvec_product_B_64_filter(qA.data(), v.data(), result, rank, idxs);
+    else if (rank == 16) {}
+      // matvec_product_B_16_filter(qA.data(), v.data(), result, rank, idxs);
+    else {}
+      // matvec_product_B_64_filter(qA.data(), v.data(), result, rank, idxs);
 
-    scale_result(result, compensation, scales, fix, scale, factor, qA.cols());
+    scale_result(result, compensation, scales, fix, scale, factor, idxs->size());
   }
 
   inline void quantized_matvec_product_A(const ColMatrixUInt8 &qA, const VectorInt8 &v,

@@ -75,9 +75,9 @@ if __name__ == "__main__":
         ctypes.POINTER(ctypes.c_int), # avg_duration_cluster
         ctypes.c_bool) # verbose
     
-    dataset_file = "gist-960-euclidean.hdf5" #"gist-960-euclidean.hdf5" #"fashion-mnist-784-euclidean.hdf5" nytimes-256-angular.hdf5 deep-image-96-angular.hdf5
+    dataset_file = "deep-image-96-angular.hdf5" #"gist-960-euclidean.hdf5" #"fashion-mnist-784-euclidean.hdf5" nytimes-256-angular.hdf5 deep-image-96-angular.hdf5
     dataset_filter_attribute_range = [i for i in range(20)]
-    n_input_vecs = 1000000 #999994 # 9990000 10m # 60k mnist
+    n_input_vecs = 5000000 #999994 # 9990000 10m # 60k mnist
     index_param_sets = [
         # {
         # "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
@@ -121,38 +121,38 @@ if __name__ == "__main__":
         
     ]
     
-    # index_param_sets = []
-    # n_index_param_sets = 7
-    # n_clusters = int(math.sqrt(n_input_vecs))
-    # for i in range(0, n_index_param_sets):
-    #     if i == 0:
-    #         selectivity = 0.01
-    #     elif i == n_index_param_sets - 1:
-    #         selectivity = 0.99
-    #     else:
-    #         selectivity = (1 / n_index_param_sets) * i
-    #     index_param_set = {
-    #         "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-    #         "n_attributes_per_datapoint": 10,
-    #         "n_attr_idx_partitions": 20,
-    #         "n_input_vecs": n_input_vecs,
-    #         "n_clusters": n_clusters,
-    #         "global_dim": 256,
-    #         "rank": 32,
-    #         "train_size": 5,
-    #         "a0_selectivity": selectivity,
-    #         "euclidean": True,
-    #         "dataset_file": dataset_file,
-    #     }
-    #     index_param_sets.append(index_param_set)
+    index_param_sets = []
+    n_index_param_sets = 7
+    n_clusters = int(math.sqrt(n_input_vecs))
+    for i in range(0, n_index_param_sets):
+        if i == 0:
+            selectivity = 0.01
+        elif i == n_index_param_sets - 1:
+            selectivity = 0.99
+        else:
+            selectivity = (1 / n_index_param_sets) * i
+        index_param_set = {
+            "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
+            "n_attributes_per_datapoint": 10,
+            "n_attr_idx_partitions": 20,
+            "n_input_vecs": n_input_vecs,
+            "n_clusters": n_clusters,
+            "global_dim": 256,
+            "rank": 32,
+            "train_size": 5,
+            "a0_selectivity": selectivity,
+            "euclidean": True,
+            "dataset_file": dataset_file,
+        }
+        index_param_sets.append(index_param_set)
     
-    query_indices = [random.randint(0, n_input_vecs) for i in range(1)]
+    query_indices = [random.randint(0, n_input_vecs) for i in range(10)]
     search_param_sets = []
-    for filter_approach in ["mixed"]:#, "indexing", "mixed", "postfilter" "hybrid_avx", "indexing_avx",
+    for filter_approach in ["hybrid_avx", "indexing_avx", "postfilter", "mixed"]:#, "indexing", "mixed", "postfilter" "hybrid_avx", "indexing_avx",
         initial_M = 50
         M_increment = 200
-        initial_clusters_to_search = 1
-        clusters_to_search_increment = 1
+        initial_clusters_to_search = 5
+        clusters_to_search_increment = 5
         for i in range(10):
             search_params = {
                 "clusters_to_search": 0,
@@ -213,7 +213,7 @@ if __name__ == "__main__":
         index_param_dump = json.dumps(index_param_set, sort_keys=True, ensure_ascii=False)
         this_results_dict = {}
         outputs = {}
-        fig, ax = plt.subplots()
+        fig, axs = plt.subplots(1, 2)
         exact_latency = 0
         prev_filter_approach = ""
         skip_rest = False
@@ -293,20 +293,21 @@ if __name__ == "__main__":
                 # print("recalls: ", (all_recalls))
                 # print("all_approximate_latencies: ", (all_approximate_latencies))
                 all_exact_latencies = [o["exact_latency"] for o in outputs[filter_approach]]
-                ax.plot(all_recalls, all_filter_times, label=f"{filter_approach}-filteronly") # index_param_set["label"] if "label" in index_param_set else f"selectivity={index_param_set["a0_selectivity"]}"
-                ax.plot(all_recalls, all_approximate_latencies, label=filter_approach) # index_param_set["label"] if "label" in index_param_set else f"selectivity={index_param_set["a0_selectivity"]}"
-                ax.axhline(y=avg_exact_search_latency, color='r', linestyle='--', label='prefilter')
-                ax.set_yscale('log')
+                axs[0].plot(all_recalls, all_filter_times, label=f"{filter_approach}-filteronly") # index_param_set["label"] if "label" in index_param_set else f"selectivity={index_param_set["a0_selectivity"]}"
+                axs[1].plot(all_recalls, all_approximate_latencies, label=filter_approach) # index_param_set["label"] if "label" in index_param_set else f"selectivity={index_param_set["a0_selectivity"]}"
+                # ax.axhline(y=avg_exact_search_latency, color='r', linestyle='--', label='prefilter')
+                # ax.set_yscale('log')
                 # print("all_recalls: ", all_recalls)
                 # print("all_approximate_latencies: ", all_approximate_latencies)
                 this_results_dict[filter_approach]= {"approximate_latencies": all_approximate_latencies, "exact_latencies": all_exact_latencies, "recalls": all_recalls, "filter_times": all_filter_times}
         experiment_data[index_param_dump] = this_results_dict
         # with open(results_file_name, 'w') as f:
         #     json.dump(experiment_data, f)
-        labelLines(ax.get_lines(), align=False)
-        ax.set_title(f"Log Latency, Recall, and {index_param_set["a0_selectivity"]:.3} Selectivity ({n_input_vecs} points)")
-        ax.set_ylabel("Latency (μs)")
-        ax.set_xlabel("Recall")
+        for ax in axs:
+            labelLines(ax.get_lines(), align=False)
+            ax.set_title(f"Log Latency, Recall, and {index_param_set["a0_selectivity"]:.3} Selectivity ({n_input_vecs} points)")
+            ax.set_ylabel("Latency (μs)")
+            ax.set_xlabel("Recall")
         fig.savefig(f"../../figures/{index_param_set["dataset_file"].split('.', 1)[0]}-{index_param_set["n_input_vecs"]}-dec12-recall-latency_a0{index_param_set["a0_selectivity"]}.png")
     plt.show()
 

@@ -197,6 +197,26 @@ public:
         }
     };
 
+    struct BitsetViewHash {
+        size_t operator()(const BitsetMatrix::BitsetView& view) const {
+            size_t hash = 0;
+            for (size_t i = 0; i < view.blocks_per_bitset; ++i) {
+                hash ^= std::hash<BitsetMatrix::Block>{}(view.blocks[i]) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+            }
+            return hash;
+        }
+    };
+
+    struct BitsetViewEqual {
+        bool operator()(const BitsetMatrix::BitsetView& a,
+                        const BitsetMatrix::BitsetView& b) const {
+            if (a.blocks_per_bitset != b.blocks_per_bitset) return false;
+            for (size_t i = 0; i < a.blocks_per_bitset; ++i)
+                if (a.blocks[i] != b.blocks[i]) return false;
+            return true;
+        }
+    };
+
     // --- Extract a BitsetKey from a given data point ---
     BitsetKey key(size_t point) const {
         size_t start = point * blocks_per_bitset;
@@ -213,22 +233,3 @@ private:
 };
 
 
-struct BitsetViewHash {
-    size_t operator()(const BitsetMatrix::BitsetView& view) const {
-        size_t hash = 0;
-        for (size_t i = 0; i < view.blocks_per_bitset; ++i) {
-            hash ^= std::hash<BitsetMatrix::Block>{}(view.blocks[i]) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
-        }
-        return hash;
-    }
-};
-
-struct BitsetViewEqual {
-    bool operator()(const BitsetMatrix::BitsetView& a,
-                    const BitsetMatrix::BitsetView& b) const {
-        if (a.blocks_per_bitset != b.blocks_per_bitset) return false;
-        for (size_t i = 0; i < a.blocks_per_bitset; ++i)
-            if (a.blocks[i] != b.blocks[i]) return false;
-        return true;
-    }
-};

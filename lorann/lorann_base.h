@@ -21,8 +21,8 @@ namespace Lorann {
 
 typedef BitsetMatrix attribute_set;
 //typedef boost::container::flat_set<int> attribute_set;
-typedef std::unordered_map<BitsetMatrix::BitsetKey, std::vector<int>, BitsetMatrix::BitsetKeyHash> attribute_data_map;
-typedef std::unordered_map<BitsetMatrix::BitsetKey, std::vector<uint32_t>, BitsetMatrix::BitsetKeyHash> int32_attribute_data_map;
+typedef std::unordered_map<BitsetMatrix::BitsetView, std::vector<int>, BitsetMatrix::BitsetViewHash> attribute_data_map;
+typedef std::unordered_map<BitsetMatrix::BitsetView, std::vector<uint32_t>, BitsetMatrix::BitsetViewHash> int32_attribute_data_map;
 
 class LorannBase {
  public:
@@ -153,14 +153,14 @@ class LorannBase {
       for (int attr = 0; attr < _n_attributes; ++attr) {
         if (filter_attributes.is_set(0, attr)) {
           attribute_set& attr_set = _attribute_index_map[attr];
-          int attr_idx_size = _attribute_data_map[attr_set.key(0)].size();
+          int attr_idx_size = _attribute_data_map[attr_set.view(0)].size();
           if (attr_idx_size <= smallest_idx_size) {
             smallest_idx = attr_set;
-            smallest_idx_size = _attribute_data_map[smallest_idx.key(0)].size();
+            smallest_idx_size = _attribute_data_map[smallest_idx.view(0)].size();
           }
         }
       }
-      std::vector<int>& attribute_idx = _attribute_data_map[smallest_idx.key(0)];
+      std::vector<int>& attribute_idx = _attribute_data_map[smallest_idx.view(0)];
       attribute_data_idxs.reserve(attribute_idx.size());
       for (int i = 0; i < attribute_idx.size(); ++i) { // for each data point in the smallest index which the datapoints belong to, check if the data point has the other filter attributes as well, if yes then add to filtered list.
         int true_idx = attribute_idx[i];
@@ -418,6 +418,7 @@ class LorannBase {
     }
 
     /* Create filter attribute index maps for clusters for approximate search */
+    _attribute_partition_sets = std::move(attribute_partition_sets);
     for (int i = 0; i < _cluster_map.size(); i++) {
       attribute_data_map this_cluster_attribute_data_map;
       int32_attribute_data_map this_cluster_attribute_int_data_map;
@@ -435,7 +436,7 @@ class LorannBase {
         }
       }
       // std::cout << "Clustering cluster " << i << " with size " << cluster.size() << std::endl;
-      for (BitsetMatrix& attr_bitset : attribute_partition_sets) {
+      for (BitsetMatrix& attr_bitset : _attribute_partition_sets) {
         std::vector<int> attribute_data_idx_vec; // vector of indexes of datapoints that have at least one of the attributes in attribute_subvec_set
         std::vector<uint32_t> attribute_int_data_idx_vec;
         attribute_data_idx_vec.reserve(cluster.size());
@@ -460,9 +461,9 @@ class LorannBase {
           //   }
           // }
         }
-        this_cluster_attribute_data_map.insert({attr_bitset.key(0), attribute_data_idx_vec});
-        this_cluster_attribute_int_data_map.insert({attr_bitset.key(0), attribute_int_data_idx_vec});
-        this_cluster_reverse_index_map.insert({attr_bitset.key(0), this_cluster_reverse_index});
+        this_cluster_attribute_data_map.insert({attr_bitset.view(0), attribute_data_idx_vec});
+        this_cluster_attribute_int_data_map.insert({attr_bitset.view(0), attribute_int_data_idx_vec});
+        this_cluster_reverse_index_map.insert({attr_bitset.view(0), this_cluster_reverse_index});
       }
       _cluster_attribute_data_maps.push_back(this_cluster_attribute_data_map); // add cluster attribute data map to vector of all cluster attribute data maps
       _cluster_attribute_int_data_maps.push_back(this_cluster_attribute_int_data_map);
@@ -565,7 +566,7 @@ class LorannBase {
   mutable std::vector<attribute_data_map> _cluster_attribute_data_maps;
   mutable std::vector<attribute_data_map> _cluster_reverse_index_maps;
   mutable std::vector<int32_attribute_data_map> _cluster_attribute_int_data_maps;
-  
+  mutable std::vector<BitsetMatrix> _attribute_partition_sets;
   /* vector of points assigned to a cluster, for each cluster */
   std::vector<std::vector<int>> _cluster_map;
   std::vector<std::vector<uint32_t>> _cluster_attribute_int_map;

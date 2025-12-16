@@ -189,15 +189,15 @@ class Lorann : public LorannBase {
         for (int attr = 0; attr < _n_attributes; ++attr) {
           if (filter_attributes.is_set(0, attr)) {
             attribute_set& attr_set = _attribute_index_map[attr];
-            int attr_idx_size = this_cluster_attribute_data_map[attr_set.key(0)].size();
+            int attr_idx_size = this_cluster_attribute_data_map[attr_set.view(0)].size();
             if (attr_idx_size <= smallest_idx_size) {
               smallest_idx = attr_set;
-              smallest_idx_size = this_cluster_attribute_data_map[attr_set.key(0)].size();
+              smallest_idx_size = this_cluster_attribute_data_map[attr_set.view(0)].size();
             }
           }
         }
-        std::vector<int>& attribute_idx = this_cluster_attribute_data_map[smallest_idx.key(0)];
-        std::vector<int>& reverse_index = this_cluster_reverse_index_map[smallest_idx.key(0)];
+        std::vector<int>& attribute_idx = this_cluster_attribute_data_map[smallest_idx.view(0)];
+        std::vector<int>& reverse_index = this_cluster_reverse_index_map[smallest_idx.view(0)];
         
         attribute_data_idxs.reserve(attribute_idx.size());
         cluster_attribute_data_idxs.reserve(attribute_idx.size());
@@ -232,7 +232,7 @@ class Lorann : public LorannBase {
           if (filter_attributes.is_set(0, attr)) {
               attribute_set& attr_set = _attribute_index_map[attr];
 
-              auto& candidate = this_cluster_attribute_int_data_map[attr_set.key(0)];
+              auto& candidate = this_cluster_attribute_int_data_map[attr_set.view(0)];
               int attr_idx_size = candidate.size();
 
               if (attr_idx_size <= smallest_idx_size) {
@@ -242,7 +242,7 @@ class Lorann : public LorannBase {
               }
           }
         }
-        std::vector<int>& reverse_index = this_cluster_reverse_index_map[best_attr_set->key(0)];
+        std::vector<int>& reverse_index = this_cluster_reverse_index_map[best_attr_set->view(0)];
         attribute_data_idxs.reserve(smallest_idx_size);
         cluster_attribute_data_idxs.reserve(smallest_idx_size);
         attribute_data_idxs_ptr = &attribute_data_idxs;
@@ -292,7 +292,7 @@ class Lorann : public LorannBase {
           unsigned bit = __builtin_ctz(mask);        // index of least-significant set bit
           int attr = static_cast<int>(bit);
           attribute_set& attr_set = _attribute_index_map[attr];
-          const auto& candidate = this_cluster_attribute_data_map[attr_set.key(0)];
+          const auto& candidate = this_cluster_attribute_data_map[attr_set.view(0)];
           int attr_idx_size = static_cast<int>(candidate.size());
 
           if (attr_idx_size < smallest_idx_size) {
@@ -301,9 +301,10 @@ class Lorann : public LorannBase {
           }
           mask &= mask - 1; // clear LSB
         }
+        attribute_data_idxs_ptr = &this_cluster_attribute_data_map[best_attr_set->view(0)];
+        cluster_attribute_data_idxs_ptr = &this_cluster_reverse_index_map[best_attr_set->view(0)];
         auto stop_mixed_loop = std::chrono::high_resolution_clock::now();
-        attribute_data_idxs_ptr = &this_cluster_attribute_data_map[best_attr_set->key(0)];
-        cluster_attribute_data_idxs_ptr = &this_cluster_reverse_index_map[best_attr_set->key(0)];
+
         
         // const std::vector<int>& this_cluster = _cluster_map[cluster];
         // int filter_matches = 0;
@@ -313,7 +314,7 @@ class Lorann : public LorannBase {
         //     filter_matches++;
         //   }
         // }
-        // std::vector<int> temp_attribute_data_idxs = this_cluster_attribute_data_map[smallest_idx.key(0)];
+        // std::vector<int> temp_attribute_data_idxs = this_cluster_attribute_data_map[smallest_idx.view(0)];
         // int idx_filter_matches = 0;
         // for (int i = 0; i < temp_attribute_data_idxs.size(); ++i) {
         //   bool filters_match = _attributes.matches(temp_attribute_data_idxs[i], filter_attributes);
@@ -560,8 +561,8 @@ class Lorann : public LorannBase {
         for (int i = 0; i < _n_attributes; ++i) {
           if (attribute_subvec_bitset.is_set(0, i)) _attribute_index_map.insert({i, attribute_subvec_bitset});
         }
-        _attribute_data_map.insert({attribute_subvec_bitset.key(0), attribute_data_idx_vec});
-        _attribute_int_data_map.insert({attribute_subvec_bitset.key(0), attribute_data_attr_idx_vec});
+        _attribute_data_map.insert({attribute_subvec_bitset.view(0), attribute_data_idx_vec});
+        _attribute_int_data_map.insert({attribute_subvec_bitset.view(0), attribute_data_attr_idx_vec});
       }
     }
 

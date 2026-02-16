@@ -168,12 +168,28 @@ public:
         return true;
     }
 
+    inline bool matches_int(size_t point, uint32_t filter_int) const {
+        size_t start = point * blocks_per_bitset;
+        if ((data[start] & filter_int) != filter_int) {
+            return false; // data point does not have all filter attributes
+        }
+        return true; // all filter attributes matched
+    }
+
     inline bool any_match(size_t point, const BitsetMatrix& filter_matrix) const {
         size_t start_point = point * blocks_per_bitset;
         for (size_t i = 0; i < blocks_per_bitset; ++i) {
             if ((data[start_point + i] & filter_matrix.data[i]) != 0) {
                 return true;  // found at least one matching bit
             }
+        }
+        return false; // no bits matched
+    }
+
+    inline bool any_match_int(size_t point, uint32_t filter_int) const {
+        size_t start_point = point * blocks_per_bitset;
+        if ((data[start_point] & filter_int) != 0) {
+            return true;  // found at least one matching bit
         }
         return false; // no bits matched
     }

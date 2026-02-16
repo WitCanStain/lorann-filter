@@ -550,4 +550,8 @@ struct FastBitsetHash {
     }
 };
 
+inline bool is_bit_set(uint32_t value, int bit) {
+  return (value & (1U << bit)) != 0;
+}
+
 }  // namespace Lorann

@@ -252,11 +252,12 @@ extern "C" {
     int* part_time,
     bool verbose) {
     Lorann::Lorann<Lorann::SQ4Quantizer> index = *index_ptr;
-    BitsetMatrix filter_attributes;
+    uint32_t filter_attributes = 0;
     uint32_t filter_attributes_int = 0;
-    filter_attributes.init(1, _n_attributes);
+    // filter_attributes.init(1, _n_attributes);
     for (int i = 0; i<n_filter_attributes; ++i) {
-      filter_attributes.set(0, int_filter_attributes[i]);
+      // filter_attributes.set(0, int_filter_attributes[i]);
+      filter_attributes |= (1u << int_filter_attributes[i]);
       filter_attributes_int |= (1u << int_filter_attributes[i]);
     }
     // std::cout << "input filter attributes: ";
@@ -313,7 +314,7 @@ extern "C" {
     int exact_indices_true_matches = 0;
     for (const auto& exact_indices: all_exact_indices) {
       for (const auto& idx: exact_indices) {
-        bool matches = attribute_bitmatrix.matches(idx, filter_attributes);
+        bool matches = attribute_bitmatrix.matches_int(idx, filter_attributes);
         if (matches) exact_indices_true_matches++;
       }
     }
@@ -322,11 +323,11 @@ extern "C" {
     int approx_indices_true_matches = 0;
     for (const auto& approx_indices: all_approx_indices) {
       for (const auto& idx: approx_indices) {
-        bool matches = attribute_bitmatrix.matches(idx, filter_attributes);
+        bool matches = attribute_bitmatrix.matches_int(idx, filter_attributes);
         if (matches) {
           approx_indices_true_matches++;
         } else {
-          std::cout << "idx " << idx << " does not match filter attributes.\nidx attributes: " << attribute_bitmatrix.string_point(idx) << "\nFilter attributes: " << filter_attributes.string_point(0) << std::endl;
+          std::cout << "idx " << idx << " does not match filter attributes.\nidx attributes: " << attribute_bitmatrix.string_point(idx) << "\nFilter attributes: " << filter_attributes_int << std::endl;
 
         }
       }

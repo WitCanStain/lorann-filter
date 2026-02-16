@@ -139,7 +139,7 @@ struct SQ4Quantizer : SQQuantizer {
   static constexpr int compensation_factor = 8;
   static constexpr int div_factor = 2;
 
-#if defined(__AVX2__)
+#if defined(false) // __AVX2__
 
   inline void matvec_product_A(const uint8_t *A, const int8_t *x, float *result, const size_t rows,
                                const size_t cols) const {
@@ -209,7 +209,6 @@ struct SQ4Quantizer : SQQuantizer {
     std::vector<int>* idxs) const
   {
 
-    
       const __m256i vec_chunk =
           _mm256_loadu_si256(reinterpret_cast<const __m256i*>(x));
 
@@ -572,7 +571,6 @@ struct SQ4Quantizer : SQQuantizer {
                                          float *result, bool verbose=false) const {
     const float *scales = correction.data();
     const float *fix = correction.data() + qA.cols();
-    // std::cout << " using sq4quantizer" << std::endl;
     const int rank = qA.rows() * 2;
     if (rank == 32)
       matvec_product_B_32_filter(qA.data(), v.data(), result, rank, idxs);

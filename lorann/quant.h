@@ -139,7 +139,7 @@ struct SQ4Quantizer : SQQuantizer {
   static constexpr int compensation_factor = 8;
   static constexpr int div_factor = 2;
 
-#if defined(false) // __AVX2__
+#if defined(__AVX2__) // __AVX2__
 
   inline void matvec_product_A(const uint8_t *A, const int8_t *x, float *result, const size_t rows,
                                const size_t cols) const {

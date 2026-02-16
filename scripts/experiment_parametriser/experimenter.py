@@ -75,7 +75,7 @@ if __name__ == "__main__":
         ctypes.POINTER(ctypes.c_int), # avg_duration_cluster
         ctypes.c_bool) # verbose
     
-    dataset_file = "gist-960-euclidean.hdf5" #"gist-960-euclidean.hdf5" #"fashion-mnist-784-euclidean.hdf5" nytimes-256-angular.hdf5 deep-image-96-angular.hdf5
+    dataset_file = "deep-image-96-angular.hdf5" #"gist-960-euclidean.hdf5" #"fashion-mnist-784-euclidean.hdf5" nytimes-256-angular.hdf5 deep-image-96-angular.hdf5
     dataset_filter_attribute_range = [i for i in range(32)]
     n_input_vecs = 1000000 #999994 # 9990000 10m # 60k mnist
     index_param_sets = [
@@ -217,7 +217,7 @@ if __name__ == "__main__":
         M_increment = 50
         initial_clusters_to_search = 5
         clusters_to_search_increment = 10
-        filter_approaches = ["hybrid", "hybrid_avx", "indexing_avx"]
+        filter_approaches = ["hybrid", "hybrid_avx", "indexing_avx", "postfilter"]
         
         for filter_approach in filter_approaches:
             i = 0
@@ -349,7 +349,7 @@ if __name__ == "__main__":
             ax.set_title(f"Latency, Recall, and {index_param_set["a0_selectivity"]:.3} Selectivity ({n_input_vecs} points)")
             ax.set_ylabel("Latency (μs)")
             ax.set_xlabel("Recall")
-        fig.savefig(f"../../figures/feb16-ablation-gist-{index_param_set["dataset_file"].split('.', 1)[0]}-{index_param_set["n_input_vecs"]}-recall-latency_a0{index_param_set["a0_selectivity"]}.png")
+        fig.savefig(f"../../figures/feb16-log-ablation-{index_param_set["dataset_file"].split('.', 1)[0]}-{index_param_set["n_input_vecs"]}-recall-latency_a0{index_param_set["a0_selectivity"]}.png")
     plt.show()
 
 

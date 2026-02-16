@@ -115,7 +115,6 @@ class Lorann : public LorannBase {
     const float compensation = quantized_query.cast<float>().sum();
     const float compensation_data = compensation * quant_data.compensation_factor;
     const float compensation_query = compensation * quant_query.compensation_factor;
-    // std::vector<int> I(clusters_to_search);
 
     int n_clusters = _centroids_quantized.cols();
     ColVectorInt cluster_labels(n_clusters);
@@ -348,7 +347,7 @@ class Lorann : public LorannBase {
         cluster_attribute_data_idxs_ptr = &cluster_attribute_data_idxs;
         n_filtered_cluster_datapoints = attribute_data_idxs_ptr->size();
         auto stop_hybrid_avx = std::chrono::high_resolution_clock::now();
-        auto duration_hybrid_avx = std::chrono::duration_cast<std::chrono::nanoseconds>(stop_hybrid_avx - start_hybrid_avx);
+        auto duration_hybrid_avx = std::chrono::duration_cast<std::chrono::microseconds>(stop_hybrid_avx - start_hybrid_avx);
         total_hybrid_avx_duration += duration_hybrid_avx;
       } else if (filter_approach == "hybrid") {
         auto start_hybrid = std::chrono::high_resolution_clock::now();
@@ -366,70 +365,35 @@ class Lorann : public LorannBase {
         }
         n_filtered_cluster_datapoints = attribute_data_idxs_ptr->size();
         auto stop_hybrid = std::chrono::high_resolution_clock::now();
-        auto duration_hybrid = std::chrono::duration_cast<std::chrono::nanoseconds>(stop_hybrid - start_hybrid);
+        auto duration_hybrid = std::chrono::duration_cast<std::chrono::microseconds>(stop_hybrid - start_hybrid);
         total_hybrid_duration += duration_hybrid;
       }
       auto stop_filter = std::chrono::high_resolution_clock::now();
       cumulative_found_points += n_filtered_cluster_datapoints;
       // std::cout << "cumulative_found_points: " << cumulative_found_points << std::endl;
       if ((use_attr_indexing && n_filtered_cluster_datapoints == 0)) continue;
-      const ColMatrixUInt8 &A = _A[cluster];
-      const ColMatrixUInt8 &B = _B[cluster];
-      const Vector &A_correction = _A_corrections[cluster];
-      const Vector &B_correction = _B_corrections[cluster];
-      auto start_matvec = std::chrono::high_resolution_clock::now();
-      /* compute s = q^T A */
-      quant_data.quantized_matvec_product_A(A, quantized_query, A_correction, quantization_factor,
-                                            principal_axis, compensation_data, tmp.data());
-      
-      const float principal_axis_tmp = tmp[0];
 
-      const float tmpfact = quant_query.quantize_vector(tmp.data() + 1, _max_rank - 1,
-                                                        quantized_query_doubled.data());
-      const float compensation_tmp =
-          quantized_query_doubled.cast<float>().sum() * quant_data.compensation_factor;
-      
-      /* compute r = s^T B */
+      // ---- ABLATION: direct squared Euclidean distance ----
+      auto start_matvec = std::chrono::high_resolution_clock::now();
       if (use_attr_indexing) {
-        const auto& idxs = *cluster_attribute_data_idxs_ptr;
-        const int rows = B.rows();
-        const int new_cols = idxs.size();
-        ColMatrixUInt8 B_reduced(rows, new_cols);
-        const size_t col_bytes = rows * sizeof(uint8_t);
-        Vector correction_reduced(2 * new_cols);
-        for (int i = 0; i < new_cols; ++i) {
-          int idx = idxs[i];
-          correction_reduced[i] = B_correction[idx];             // scale
-          correction_reduced[i + new_cols] = B_correction[idx + B.cols()];  // fix
-          std::memcpy(
-              B_reduced.data() + i * rows,
-              B.data() + idx * rows,
-              col_bytes
-          );
+        const auto& idxs = *attribute_data_idxs_ptr;
+        for (int j = 0; j < n_filtered_cluster_datapoints; ++j) {
+          all_distances[current_cumulative_size + j] =
+              squared_euclidean(data, _data + idxs[j] * _dim, _dim);
         }
-        
-        quant_data.quantized_matvec_product_B(B_reduced, quantized_query_doubled, correction_reduced, tmpfact,
-                                                    principal_axis_tmp, compensation_tmp,
-                                                    &all_distances[current_cumulative_size]);
-        
-        
-        // quant_data.quantized_matvec_product_B_filter(B, quantized_query_doubled, cluster_attribute_data_idxs_ptr, B_correction, tmpfact,
-        //                                             principal_axis_tmp, compensation_tmp,
-        //                                             &all_distances[current_cumulative_size], verbose);
-        
       } else {
-        quant_data.quantized_matvec_product_B(B, quantized_query_doubled, B_correction, tmpfact,
-                                                    principal_axis_tmp, compensation_tmp,
-                                                    &all_distances[current_cumulative_size]);
+        const std::vector<int>& this_cluster = _cluster_map[cluster];
+        for (int j = 0; j < sz; ++j) {
+          all_distances[current_cumulative_size + j] =
+              squared_euclidean(data, _data + this_cluster[j] * _dim, _dim);
+        }
       }
       auto stop_matvec = std::chrono::high_resolution_clock::now();
       auto duration_matvec = std::chrono::duration_cast<std::chrono::nanoseconds>(stop_matvec - start_matvec);
       total_duration_matvec += duration_matvec;
       auto duration_filter = std::chrono::duration_cast<std::chrono::nanoseconds>(stop_filter - start_filter);
       total_duration_filterapproach += duration_filter;
-      if (_euclidean)
-        add_inplace(_cluster_norms[cluster].data(), &all_distances[current_cumulative_size],
-                    _cluster_norms[cluster].size());
+
       // int to_copy = use_attr_indexing ? n_filtered_cluster_datapoints : sz;
       // int needed_size = current_cumulative_size + to_copy;
       if (use_attr_indexing) { // when we use indexing, we process fewer results than the full size of the cluster due to filtering them beforehand.
@@ -477,7 +441,7 @@ class Lorann : public LorannBase {
     int knn_buffer = (filter_approach == "postfilter" || filter_approach == "mixed") ? 8 : 1;
     Eigen::VectorXi shuffled_out(k * knn_buffer); // why is this needed?
     // std::cout << "current_cumulative_size for " << filter_approach << ": " << current_cumulative_size << std::endl;
-    select_final(_euclidean ? data : scaled_query.data(), k * knn_buffer, points_to_rerank, current_cumulative_size,
+    select_final(data, k * knn_buffer, 0, current_cumulative_size,
                  all_idxs.data(), all_distances.data(), shuffled_out.data(), dist_out);
     auto stop_postwork = std::chrono::high_resolution_clock::now();
     auto start_postfilter = std::chrono::high_resolution_clock::now();

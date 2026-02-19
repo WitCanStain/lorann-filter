@@ -348,7 +348,7 @@ class Lorann : public LorannBase {
         cluster_attribute_data_idxs_ptr = &cluster_attribute_data_idxs;
         n_filtered_cluster_datapoints = attribute_data_idxs_ptr->size();
         auto stop_hybrid_avx = std::chrono::high_resolution_clock::now();
-        auto duration_hybrid_avx = std::chrono::duration_cast<std::chrono::nanoseconds>(stop_hybrid_avx - start_hybrid_avx);
+        auto duration_hybrid_avx = std::chrono::duration_cast<std::chrono::microseconds>(stop_hybrid_avx - start_hybrid_avx);
         total_hybrid_avx_duration += duration_hybrid_avx;
       } else if (filter_approach == "hybrid") {
         auto start_hybrid = std::chrono::high_resolution_clock::now();
@@ -366,7 +366,7 @@ class Lorann : public LorannBase {
         }
         n_filtered_cluster_datapoints = attribute_data_idxs_ptr->size();
         auto stop_hybrid = std::chrono::high_resolution_clock::now();
-        auto duration_hybrid = std::chrono::duration_cast<std::chrono::nanoseconds>(stop_hybrid - start_hybrid);
+        auto duration_hybrid = std::chrono::duration_cast<std::chrono::microseconds>(stop_hybrid - start_hybrid);
         total_hybrid_duration += duration_hybrid;
       }
       auto stop_filter = std::chrono::high_resolution_clock::now();
@@ -427,9 +427,18 @@ class Lorann : public LorannBase {
       total_duration_matvec += duration_matvec;
       auto duration_filter = std::chrono::duration_cast<std::chrono::nanoseconds>(stop_filter - start_filter);
       total_duration_filterapproach += duration_filter;
-      if (_euclidean)
-        add_inplace(_cluster_norms[cluster].data(), &all_distances[current_cumulative_size],
-                    _cluster_norms[cluster].size());
+      if (_euclidean) {
+        if (use_attr_indexing) {
+          // Only add norms for the filtered points
+          const auto& idxs = *cluster_attribute_data_idxs_ptr;
+          for (int j = 0; j < n_filtered_cluster_datapoints; ++j) {
+            all_distances[current_cumulative_size + j] += _cluster_norms[cluster][idxs[j]];
+          }
+        } else {
+          add_inplace(_cluster_norms[cluster].data(), &all_distances[current_cumulative_size],
+                      _cluster_norms[cluster].size());
+        }
+      }
       // int to_copy = use_attr_indexing ? n_filtered_cluster_datapoints : sz;
       // int needed_size = current_cumulative_size + to_copy;
       if (use_attr_indexing) { // when we use indexing, we process fewer results than the full size of the cluster due to filtering them beforehand.

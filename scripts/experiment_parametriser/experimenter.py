@@ -75,7 +75,7 @@ if __name__ == "__main__":
         ctypes.POINTER(ctypes.c_int), # avg_duration_cluster
         ctypes.c_bool) # verbose
     
-    dataset_file = "deep-image-96-angular.hdf5" #"gist-960-euclidean.hdf5" #"fashion-mnist-784-euclidean.hdf5" nytimes-256-angular.hdf5 deep-image-96-angular.hdf5
+    dataset_file = "gist-960-euclidean.hdf5" #"gist-960-euclidean.hdf5" #"fashion-mnist-784-euclidean.hdf5" nytimes-256-angular.hdf5 deep-image-96-angular.hdf5
     dataset_filter_attribute_range = [i for i in range(32)]
     n_input_vecs = 1000000 #999994 # 9990000 10m # 60k mnist
     index_param_sets = [
@@ -161,6 +161,7 @@ if __name__ == "__main__":
     #             "filter_attributes": [0],
     #             "filter_approach": filter_approach,
     #             "exact_search_approach": "prefilter_avx",
+    #             "n_repeat_runs": 1,
     #             "query_indices": query_indices,
     #             "label": filter_approach
     #         }
@@ -170,6 +171,7 @@ if __name__ == "__main__":
         
     
     # experimenter parameters
+    n_repeat_runs = 1
     verbose = False
     
 
@@ -210,15 +212,15 @@ if __name__ == "__main__":
         index_param_dump = json.dumps(index_param_set, sort_keys=True, ensure_ascii=False)
         this_results_dict = {}
         outputs = {}
-        fig, axs = plt.subplots(1, 2)
+        fig, axs = plt.subplots(1, 2, figsize=(16, 8))
         exact_latency = 0
         
         initial_M = 10
         M_increment = 50
         initial_clusters_to_search = 5
         clusters_to_search_increment = 10
-        filter_approaches = ["hybrid", "hybrid_avx", "indexing_avx", "postfilter"]
-        
+        filter_approaches = ["hybrid", "hybrid_avx", "indexing_avx", "mixed", "postfilter"] #, "indexing", "mixed", "postfilter" "hybrid_avx", "indexing_avx"
+        exact_filter_approach = "postfilter"
         for filter_approach in filter_approaches:
             i = 0
             recall = 0.0
@@ -236,14 +238,15 @@ if __name__ == "__main__":
                     "M": initial_M + math.ceil(i * M_increment * 100 * index_param_set["a0_selectivity"]) if filter_approach != "postfilter" else -1, # * 100 * index_param_set["a0_selectivity"]
                     "filter_attributes": [0],
                     "filter_approach": filter_approach,
-                    "exact_search_approach": "prefilter",
+                    "exact_search_approach": exact_filter_approach,
+                    "n_repeat_runs": 1,
                     "query_indices": query_indices,
                     "label": filter_approach
                 }
                 print(f"Using {n_input_vecs} inputs and {param_set["filter_approach"]} filter method and {param_set["exact_search_approach"]} exact search approach.")
                 print(f"Running experimenter with search parameters:\n\
                 clusters_to_search = {param_set["clusters_to_search"]}\npoints_to_rerank = {param_set["points_to_rerank"]}\nk = {param_set["k"]}\nM = {param_set["M"]}\nfilter_attribute = {param_set["filter_attributes"]}\nfilter_approach = {param_set["filter_approach"]}\nexact_search_approach = {param_set["exact_search_approach"]}\n\n\
-                experiment parameters:\nn_query_indices = {len(param_set["query_indices"])}\n") #\nquery_indices = {param_set["query_indices"]}
+                experiment parameters:\nn_repeat_runs = {param_set["n_repeat_runs"]}\nn_query_indices = {len(param_set["query_indices"])}\n") #\nquery_indices = {param_set["query_indices"]}
 
                 filter_approach_b_string = param_set["filter_approach"].encode('utf-8')
                 exact_search_approach_b_string = param_set["exact_search_approach"].encode('utf-8')
@@ -334,9 +337,9 @@ if __name__ == "__main__":
             
             axs[0].plot(all_recalls, all_filter_times, label=f"{filter_approach}-filteronly") # index_param_set["label"] if "label" in index_param_set else f"selectivity={index_param_set["a0_selectivity"]}"
             axs[1].plot(all_recalls, all_approximate_latencies, label=filter_approach) # index_param_set["label"] if "label" in index_param_set else f"selectivity={index_param_set["a0_selectivity"]}"
-            axs[0].axhline(y=avg_exact_search_latency, color='r', linestyle='--', label='postfilter')
+            axs[0].axhline(y=avg_exact_search_latency, color='r', linestyle='--', label=exact_filter_approach)
             axs[0].set_yscale('log')
-            axs[1].axhline(y=avg_exact_search_latency, color='r', linestyle='--', label='postfilter')
+            axs[1].axhline(y=avg_exact_search_latency, color='r', linestyle='--', label=exact_filter_approach)
             axs[1].set_yscale('log')
             # print("all_recalls: ", all_recalls)
             # print("all_approximate_latencies: ", all_approximate_latencies)
@@ -349,7 +352,7 @@ if __name__ == "__main__":
             ax.set_title(f"Latency, Recall, and {index_param_set["a0_selectivity"]:.3} Selectivity ({n_input_vecs} points)")
             ax.set_ylabel("Latency (μs)")
             ax.set_xlabel("Recall")
-        fig.savefig(f"../../figures/feb16-log-ablation-{index_param_set["dataset_file"].split('.', 1)[0]}-{index_param_set["n_input_vecs"]}-recall-latency_a0{index_param_set["a0_selectivity"]}.png")
+        fig.savefig(f"../../figures/feb19-ablation-log-{index_param_set["dataset_file"].split('.', 1)[0]}-{exact_filter_approach}-{index_param_set["n_input_vecs"]}-recall-latency_a0{index_param_set["a0_selectivity"]}.png")
     plt.show()
 
 

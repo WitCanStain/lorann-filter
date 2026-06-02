@@ -127,6 +127,8 @@ class Lorann : public LorannBase {
     // compute safe allocation size for result buffers
     const int total_pts_all = _cluster_sizes.sum();
     const int required_points = use_attr_indexing ? (M * k) : 0;
+    if (verbose) std::cout << "M: " << M << ", k: " << k << ", clusters_to_search: " << clusters_to_search << std::endl;
+    if (verbose) std::cout << "total_pts_all: " << total_pts_all << ", required_points: " << required_points << std::endl;
     int allocate_pts = total_pts_all;
     if (use_attr_indexing) {
       allocate_pts = std::max(total_pts_all, 2 * required_points);
@@ -474,6 +476,7 @@ class Lorann : public LorannBase {
       std::cout <<"total_duration_filterapproach: " << std::chrono::duration_cast<std::chrono::microseconds>(total_duration_filterapproach).count() << " microseconds" << std::endl;
       if (filter_approach != "postfilter") std::cout << "!! Average ratio of satisfactory points to cluster size: " << ((double) cumulative_found_points) / cumulative_cluster_size << std::endl;
       std::cout << "current_cumulative_size: " << current_cumulative_size << std::endl;
+      std::cout << "cumulative_cluster_size: " << cumulative_cluster_size << std::endl;
       std::cout << "duration_filter: " << std::chrono::duration_cast<std::chrono::microseconds>(duration_filter).count() << " microseconds" << std::endl;
       // std::cout << "duration_prework: " << duration_prework.count() << " microseconds" << std::endl;
       // std::cout << "total_smallest_idx_sizes: " << total_smallest_idx_sizes << std::endl;
@@ -502,6 +505,7 @@ class Lorann : public LorannBase {
       int matched_k = matched_idxs.size();
       int new_k = k * knn_buffer;
       int i = 0;
+      if (verbose) std::cout << "current_cumulative_size: " << current_cumulative_size << std::endl;
       while (matched_k < k) { // if not enough datapoints are found in k results, double it and search again
         i++;
         new_k = new_k * 2 > current_cumulative_size ? current_cumulative_size : new_k * 2;
@@ -518,7 +522,7 @@ class Lorann : public LorannBase {
         }
         matched_k = matched_idxs.size();
         if (matched_k < k && new_k == current_cumulative_size) {
-          std::cout << "could not find enough samples (found " << matched_k << ")" << std::endl;
+          std::cout << "could not find enough samples (approx search, found " << matched_k << " out of " << new_k << ")" << std::endl;
           break;
         }
       }

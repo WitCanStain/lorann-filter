@@ -23,7 +23,9 @@ class bcolors:
     UNDERLINE = '\033[4m'
 
 todays_time = datetime.today().strftime('%Y-%m-%d %H:%M:%S')
-results_file_name = "1m-gist-progressive-experimental_results-" + todays_time + ".json"
+repo_root = pathlib.Path(__file__).resolve().parents[2]
+results_dir = repo_root / "results"
+results_dir.mkdir(parents=True, exist_ok=True)
 
 if __name__ == "__main__":
     # Load the shared library into ctypes
@@ -48,15 +50,6 @@ if __name__ == "__main__":
         ctypes.c_char_p # dataset_file_path
         )
     
-    # c_lib.filter.restype = ctypes.c_float
-    # c_lib.filter.argtypes = ctypes.c_int, ctypes.c_bool, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p
-
-    # c_lib.filter_proc.restype = ctypes.c_int
-    # c_lib.filter_proc.argtypes = ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool, ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.c_bool, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p
-
-    # c_lib.filter_wrapper.restype = ctypes.c_float
-    # c_lib.filter_wrapper.argtypes = ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.c_bool, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p
-
     c_lib.fast_filter_wrapper_profiled.restype = ctypes.c_float
     c_lib.fast_filter_wrapper_profiled.argtypes = (
         ctypes.POINTER(ctypes.c_int), # idxs
@@ -72,12 +65,15 @@ if __name__ == "__main__":
         ctypes.POINTER(ctypes.c_float), # recall
         ctypes.POINTER(ctypes.c_int), # approx_latency
         ctypes.POINTER(ctypes.c_int), # exact_latency
+        ctypes.POINTER(ctypes.c_int), # exact_filter_time
         ctypes.POINTER(ctypes.c_int), # avg_duration_cluster
         ctypes.c_bool) # verbose
     
-    dataset_file = "deep-image-96-angular.hdf5" #"gist-960-euclidean.hdf5" #"fashion-mnist-784-euclidean.hdf5" nytimes-256-angular.hdf5 deep-image-96-angular.hdf5
+    dataset_file = "gist-960-euclidean.hdf5" #"gist-960-euclidean.hdf5" #"fashion-mnist-784-euclidean.hdf5" nytimes-256-angular.hdf5 deep-image-96-angular.hdf5
+    dataset_label = pathlib.Path(dataset_file).stem
     dataset_filter_attribute_range = [i for i in range(32)]
-    n_input_vecs = 1000000 #999994 # 9990000 10m # 60k mnist
+    n_input_vecs = 1_000_000 #999994 # 9990000 deep # 60k mnist
+    results_file_name = results_dir / (f"{dataset_label}-{n_input_vecs}-{todays_time}.json")
     index_param_sets = [
         {
         "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
@@ -121,7 +117,7 @@ if __name__ == "__main__":
     ]
     
     index_param_sets = []
-    n_index_param_sets = 3
+    n_index_param_sets = 6
     n_clusters = int(math.sqrt(n_input_vecs))
     for i in range(0, n_index_param_sets):
         if i == 0:
@@ -132,8 +128,8 @@ if __name__ == "__main__":
             selectivity = (1 / (n_index_param_sets - 1)) * i
         index_param_set = {
             "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
-            "n_attributes_per_datapoint": 10,
-            "n_attr_idx_partitions": 32,
+            "n_attributes_per_datapoint": 32,
+            "n_attr_idx_partitions": 10,
             "n_input_vecs": n_input_vecs,
             "n_clusters": n_clusters,
             "global_dim": 256,
@@ -142,6 +138,7 @@ if __name__ == "__main__":
             "a0_selectivity": selectivity,
             "euclidean": True,
             "dataset_file": dataset_file,
+            "log_on": True
         }
         index_param_sets.append(index_param_set)
     
@@ -173,7 +170,7 @@ if __name__ == "__main__":
     # experimenter parameters
     n_repeat_runs = 1
     verbose = True
-    
+    # exact_search_approach = "postfilter"
 
     try:
         with open(results_file_name, "r", encoding="utf-8") as f:
@@ -216,10 +213,10 @@ if __name__ == "__main__":
         exact_latency = 0
         
         initial_M = 10
-        M_increment = 50
-        initial_clusters_to_search = 5
-        clusters_to_search_increment = 10
-        filter_approaches = ["hybrid", "hybrid_avx"]
+        M_increment = 20
+        initial_clusters_to_search = 10
+        clusters_to_search_increment = 20
+        filter_approaches = ["hybrid_avx", "postfilter", "indexing_avx", "mixed"] #, "indexing", "mixed", "postfilter" "hybrid_avx", "indexing_avx",
         
         for filter_approach in filter_approaches:
             i = 0
@@ -238,11 +235,12 @@ if __name__ == "__main__":
                     "M": initial_M + math.ceil(i * M_increment * 100 * index_param_set["a0_selectivity"]) if filter_approach != "postfilter" else -1, # * 100 * index_param_set["a0_selectivity"]
                     "filter_attributes": [0],
                     "filter_approach": filter_approach,
-                    "exact_search_approach": "postfilter",
+                    "exact_search_approach": "postfilter" if i == 0 else "prefilter_avx",
                     "n_repeat_runs": 1,
                     "query_indices": query_indices,
                     "label": filter_approach
                 }
+                print(f"exact_search_approach: {param_set['exact_search_approach']}")
                 print(f"Using {n_input_vecs} inputs and {param_set["filter_approach"]} filter method and {param_set["exact_search_approach"]} exact search approach.")
                 print(f"Running experimenter with search parameters:\n\
                 clusters_to_search = {param_set["clusters_to_search"]}\npoints_to_rerank = {param_set["points_to_rerank"]}\nk = {param_set["k"]}\nM = {param_set["M"]}\nfilter_attribute = {param_set["filter_attributes"]}\nfilter_approach = {param_set["filter_approach"]}\nexact_search_approach = {param_set["exact_search_approach"]}\n\n\
@@ -258,6 +256,7 @@ if __name__ == "__main__":
                 param_recall = ctypes.c_float(0.)
                 param_approx_latency = ctypes.c_int(0)
                 param_exact_latency = ctypes.c_int(0)
+                param_exact_filter_time = ctypes.c_int(0)
                 param_filter_time = ctypes.c_int(0)
                 c_lib.fast_filter_wrapper_profiled(
                     query_index_arr.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
@@ -273,6 +272,7 @@ if __name__ == "__main__":
                     ctypes.byref(param_recall),
                     ctypes.byref(param_approx_latency),
                     ctypes.byref(param_exact_latency),
+                    ctypes.byref(param_exact_filter_time),
                     ctypes.byref(param_filter_time),
                     verbose
                 )
@@ -290,6 +290,7 @@ if __name__ == "__main__":
                 #     continue
                 approx_latency = param_approx_latency.value
                 exact_latency = param_exact_latency.value
+                exact_filter_time = param_exact_filter_time.value
                 filter_time = param_filter_time.value
                 end_time = time.process_time()
                 elapsed_time = end_time - start_time
@@ -298,14 +299,16 @@ if __name__ == "__main__":
                 avg_exact_search_latency = exact_latency
                 avg_recall = recall
                 avg_filter_time = filter_time
+                avg_exact_filter_time = exact_filter_time
                 print(bcolors.WARNING + "Average recall: " + str(avg_recall) + bcolors.ENDC)
                 print(bcolors.OKBLUE + "Average exact (", param_set["exact_search_approach"], ") search latency: ", avg_exact_search_latency, " microseconds" + bcolors.ENDC)
+                print(bcolors.OKBLUE + "Average exact (", param_set["exact_search_approach"], ") filter time: ", avg_exact_filter_time, " microseconds" + bcolors.ENDC)
                 print(bcolors.OKCYAN + "Average approximate (", param_set["filter_approach"], ") search latency: ", avg_approximate_search_latency, " microseconds" + bcolors.ENDC)
                 print("Average filter time: ", avg_filter_time, " microseconds")
                 if param_set["filter_approach"] not in outputs:
-                    outputs[param_set["filter_approach"]] = [{**param_set, "recall": avg_recall, "approx_latency": avg_approximate_search_latency, "exact_latency": avg_exact_search_latency, "filter_time": avg_filter_time}]
+                    outputs[param_set["filter_approach"]] = [{**param_set, "recall": avg_recall, "approx_latency": avg_approximate_search_latency, "exact_latency": avg_exact_search_latency, "exact_filter_time": avg_exact_filter_time, "exact_approach": param_set["exact_search_approach"], "filter_time": avg_filter_time}]
                 else:
-                    outputs[param_set["filter_approach"]].append({**param_set, "recall": avg_recall, "approx_latency": avg_approximate_search_latency, "exact_latency": avg_exact_search_latency, "filter_time": avg_filter_time})
+                    outputs[param_set["filter_approach"]].append({**param_set, "recall": avg_recall, "approx_latency": avg_approximate_search_latency, "exact_latency": avg_exact_search_latency, "exact_filter_time": avg_exact_filter_time, "exact_approach": param_set["exact_search_approach"], "filter_time": avg_filter_time})
                 prev_filter_approach = param_set["filter_approach"]
                 i += 1
                 if param_set["clusters_to_search"] >= index_param_set["n_clusters"]:
@@ -316,7 +319,6 @@ if __name__ == "__main__":
             all_recalls = [o["recall"] for o in outputs[filter_approach]]
             all_approximate_latencies = [o["approx_latency"] for o in outputs[filter_approach]]
             all_filter_times = [o["filter_time"] for o in outputs[filter_approach]]
-            all_exact_latencies = [o["exact_latency"] for o in outputs[filter_approach]]
             best_recall = max(all_recalls)
             best_recall_idx = all_recalls.index(best_recall)
             # print("recalls: ", (all_recalls))
@@ -332,27 +334,36 @@ if __name__ == "__main__":
                 del all_recalls[index]
                 del all_approximate_latencies[index]
                 del all_filter_times[index]
-                del all_exact_latencies[index]
+
+            exact_latencies_by_approach = {}
+            exact_filter_times_by_approach = {}
+            for output in outputs[filter_approach]:
+                exact_approach_name = output.get("exact_approach", "exact")
+                exact_latencies_by_approach.setdefault(exact_approach_name, []).append(output["exact_latency"])
+                exact_filter_times_by_approach.setdefault(exact_approach_name, []).append(output["exact_filter_time"])
 
             
             axs[0].plot(all_recalls, all_filter_times, label=f"{filter_approach}-filteronly") # index_param_set["label"] if "label" in index_param_set else f"selectivity={index_param_set["a0_selectivity"]}"
             axs[1].plot(all_recalls, all_approximate_latencies, label=filter_approach) # index_param_set["label"] if "label" in index_param_set else f"selectivity={index_param_set["a0_selectivity"]}"
-            axs[0].axhline(y=avg_exact_search_latency, color='r', linestyle='--', label='postfilter')
+            for exact_approach_name, exact_latencies in exact_latencies_by_approach.items():
+                exact_avg_latency = sum(exact_latencies) / len(exact_latencies)
+                axs[0].axhline(y=exact_avg_latency, linestyle='--', label=exact_approach_name)
+                axs[1].axhline(y=exact_avg_latency, linestyle='--', label=exact_approach_name)
             axs[0].set_yscale('log')
-            axs[1].axhline(y=avg_exact_search_latency, color='r', linestyle='--', label='postfilter')
             axs[1].set_yscale('log')
             # print("all_recalls: ", all_recalls)
             # print("all_approximate_latencies: ", all_approximate_latencies)
-            this_results_dict[filter_approach]= {"approximate_latencies": all_approximate_latencies, "exact_latencies": all_exact_latencies, "recalls": all_recalls, "filter_times": all_filter_times}
+            this_results_dict[filter_approach]= {"approximate_latencies": all_approximate_latencies, "exact_latencies_by_approach": exact_latencies_by_approach, "exact_filter_times_by_approach": exact_filter_times_by_approach, "recalls": all_recalls, "filter_times": all_filter_times}
         experiment_data[index_param_dump] = this_results_dict
-        with open(results_file_name, 'w') as f:
+        with open(results_file_name, 'w', encoding="utf-8") as f:
             json.dump(experiment_data, f)
         for ax in axs:
             labelLines(ax.get_lines(), align=False)
             ax.set_title(f"Latency, Recall, and {index_param_set["a0_selectivity"]:.3} Selectivity ({n_input_vecs} points)")
             ax.set_ylabel("Latency (μs)")
             ax.set_xlabel("Recall")
-        # fig.savefig(f"../../figures/jan8-postfilter-extrarerank-log-{index_param_set["dataset_file"].split('.', 1)[0]}-{index_param_set["n_input_vecs"]}-recall-latency_a0{index_param_set["a0_selectivity"]}.png")
+        todays_date = datetime.today().strftime('%Y-%m-%d')
+        fig.savefig(f"../../figures/direct_figs/{todays_date}-{index_param_set["log_on"]}-{index_param_set["dataset_file"].split('.', 1)[0]}-{index_param_set["n_input_vecs"]}-recall-latency_a0{index_param_set["a0_selectivity"]}.png")
     plt.show()
 
 

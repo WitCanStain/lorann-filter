@@ -147,11 +147,13 @@ class LorannBase {
    * @param out The index output array of length k
    * @param dist_out The (optional) distance output array of length k
    */
-  void exact_search(const float *q, int k, int *out, const attribute_set& filter_attributes, uint32_t filter_attributes_int,std::string filter_approach, float *dist_out = nullptr) const {
+  void exact_search(const float *q, int k, int *out, const attribute_set& filter_attributes, uint32_t filter_attributes_int,std::string filter_approach, float *dist_out = nullptr, std::chrono::microseconds *filter_duration = nullptr) const {
     float *data_ptr = _data;
     int n_datapoints;
     std::vector<int> attribute_data_idxs;
+    std::chrono::microseconds duration_filter = std::chrono::microseconds(0);
     if (filter_approach == "indexing") {
+      auto start_filter = std::chrono::high_resolution_clock::now();
       attribute_set smallest_idx;
       int smallest_idx_size = _n_samples;
       for (int attr = 0; attr < _n_attributes; ++attr) {
@@ -182,7 +184,8 @@ class LorannBase {
       }
       // attribute_data_idxs = _attribute_data_map[filter_attributes];
       n_datapoints = attribute_data_idxs.size();
-      
+      auto stop_filter = std::chrono::high_resolution_clock::now();
+      duration_filter = std::chrono::duration_cast<std::chrono::microseconds>(stop_filter - start_filter);
     } else if (filter_approach == "prefilter") {
       auto start_filter = std::chrono::high_resolution_clock::now();
       for (int i = 0; i < _n_samples; i++) {
@@ -191,7 +194,7 @@ class LorannBase {
       }
       n_datapoints = attribute_data_idxs.size();
       auto stop_filter = std::chrono::high_resolution_clock::now();
-      auto duration_filter = std::chrono::duration_cast<std::chrono::microseconds>(stop_filter - start_filter);
+      duration_filter = std::chrono::duration_cast<std::chrono::microseconds>(stop_filter - start_filter);
     } else if (filter_approach == "prefilter_avx") {
       auto start_filter = std::chrono::high_resolution_clock::now();
       std::vector<uint16_t> masks(_n_samples);
@@ -199,7 +202,7 @@ class LorannBase {
       iterate_hits_from_masks(masks.data(), num_blocks, attribute_data_idxs);
       n_datapoints = attribute_data_idxs.size();
       auto stop_filter = std::chrono::high_resolution_clock::now();
-      auto duration_filter = std::chrono::duration_cast<std::chrono::microseconds>(stop_filter - start_filter);
+      duration_filter = std::chrono::duration_cast<std::chrono::microseconds>(stop_filter - start_filter);
     } else if (filter_approach == "postfilter") {
       n_datapoints = _n_samples;
     } else {
@@ -234,6 +237,7 @@ class LorannBase {
     Eigen::VectorXi shuffled_out(k * knn_buffer);
     select_k(k * knn_buffer, shuffled_out.data(), n_datapoints, NULL, dist.data(), dist_out, true);
     if (filter_approach == "postfilter") {
+      auto start_filter = std::chrono::high_resolution_clock::now();
       std::vector<int> matched_idxs;
       matched_idxs.reserve(k);
       for (int i = 0; i < k * knn_buffer; ++i) {
@@ -259,10 +263,12 @@ class LorannBase {
         }
         matched_k = matched_idxs.size();
         if (matched_k < k && new_k == _n_samples) {
-          std::cout << "could not find enough samples (found " << matched_k << ")" << std::endl;
+          std::cout << "could not find enough samples (exact search, found " << matched_k << ")" << std::endl;
           break;
         }
       }
+      auto stop_filter = std::chrono::high_resolution_clock::now();
+      duration_filter = std::chrono::duration_cast<std::chrono::microseconds>(stop_filter - start_filter);
       if (matched_k >= k) {
         for (int i = 0; i < k; ++i) {
           out[i] = matched_idxs[i];
@@ -276,6 +282,10 @@ class LorannBase {
     for (int i = k; i < final_k; ++i) {
       out[i] = -1;
       if (dist_out) dist_out[i] = std::numeric_limits<float>::infinity();
+    }
+
+    if (filter_duration) {
+      *filter_duration = duration_filter;
     }
     
     

@@ -14,7 +14,9 @@ subplots_vertical = 1
 use_log_scale = True
 # Choose axis for log scaling: 'y', 'x', or 'both'
 log_axis = 'y'
-
+# Toggle drawing exact postfilter/prefilter overlay lines in the graphs.
+show_exact_lines = True
+save_figures = False
 # Set this to a filename inside results/ to override the automatic latest-file selection.
 results_filename_override = None
 
@@ -77,19 +79,17 @@ n_input_vecs = json.loads(first)["n_input_vecs"]
 subplot_rows = max(1, math.ceil(len(filtered_keys) / subplots_horizontal))
 
 
-def collect_shared_log_bounds(metric_key, exact_data_key=None):
+def collect_shared_log_bounds(data, metric_key, exact_data_key=None):
     all_y_values = []
-    for key in filtered_keys:
-        data = experiment_data[key]
-        for filter_approach in data.keys():
-            all_y_values.extend(data[filter_approach].get(metric_key, []))
-            if exact_data_key:
-                exact_data = data[filter_approach].get(exact_data_key)
-                if isinstance(exact_data, dict):
-                    for exact_values in exact_data.values():
-                        all_y_values.extend(exact_values)
-                else:
-                    all_y_values.extend(data[filter_approach].get("exact_latencies", []))
+    for filter_approach in data.keys():
+        all_y_values.extend(data[filter_approach].get(metric_key, []))
+        if exact_data_key:
+            exact_data = data[filter_approach].get(exact_data_key)
+            if isinstance(exact_data, dict):
+                for exact_values in exact_data.values():
+                    all_y_values.extend(exact_values)
+            else:
+                all_y_values.extend(data[filter_approach].get("exact_latencies", []))
 
     positive_y_values = [value for value in all_y_values if value and value > 0]
     if not positive_y_values:
@@ -102,7 +102,6 @@ def collect_shared_log_bounds(metric_key, exact_data_key=None):
 
 
 def plot_metric_grid(metric_key, fig_title, file_suffix, exact_data_key=None, exact_label_suffix="exact"):
-    shared_log_bounds = collect_shared_log_bounds(metric_key, exact_data_key=exact_data_key)
     fig, axes = plt.subplots(subplot_rows, subplots_horizontal, figsize=(12, 4 * subplot_rows), constrained_layout=True)
     plt.suptitle(fig_title, fontsize=16)
     axes = axes.flatten()
@@ -118,7 +117,7 @@ def plot_metric_grid(metric_key, fig_title, file_suffix, exact_data_key=None, ex
             y_values = data[filter_approach].get(metric_key, [])
             axes[i].plot(recalls, y_values, label=f"{filter_approach}")
 
-        if exact_data_key:
+        if show_exact_lines and exact_data_key:
             exact_latencies_by_approach = {}
             for filter_approach in filter_approaches:
                 exact_data = data[filter_approach].get(exact_data_key)
@@ -138,6 +137,8 @@ def plot_metric_grid(metric_key, fig_title, file_suffix, exact_data_key=None, ex
                 except Exception:
                     pass
 
+            subplot_log_bounds = collect_shared_log_bounds(data, metric_key, exact_data_key=exact_data_key)
+
         axes[i].set_title(f"{index_data['a0_selectivity']:.2f} Selectivity")
         axes[i].tick_params(axis='y', labelrotation=45)
         axes[i].legend(loc='best', fontsize='x-small', handlelength=2, borderpad=0.2, labelspacing=0.2, handletextpad=0.4, framealpha=0.7)
@@ -150,8 +151,8 @@ def plot_metric_grid(metric_key, fig_title, file_suffix, exact_data_key=None, ex
                 axes[i].set_xscale('log')
         try:
             if use_log_scale and log_axis in ('y', 'both'):
-                if shared_log_bounds:
-                    axes[i].set_ylim(shared_log_bounds)
+                if subplot_log_bounds:
+                    axes[i].set_ylim(subplot_log_bounds)
                 axes[i].yaxis.set_major_locator(LogLocator(base=10.0, subs=(1.0,), numticks=12))
                 axes[i].yaxis.set_major_formatter(LogFormatterSciNotation(base=10.0, labelOnlyBase=True))
             else:
@@ -159,7 +160,8 @@ def plot_metric_grid(metric_key, fig_title, file_suffix, exact_data_key=None, ex
         except Exception:
             pass
 
-    fig.savefig(f"../../figures/{subplots_vertical}x{subplots_horizontal}-{dataset_label}-{file_suffix}.png")
+    if save_figures:
+        fig.savefig(f"../../figures/{subplots_vertical}x{subplots_horizontal}-{dataset_label}-{file_suffix}.png")
     return fig
 
 

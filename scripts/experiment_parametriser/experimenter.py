@@ -72,7 +72,7 @@ if __name__ == "__main__":
     dataset_file = "gist-960-euclidean.hdf5" #"gist-960-euclidean.hdf5" #"fashion-mnist-784-euclidean.hdf5" nytimes-256-angular.hdf5 deep-image-96-angular.hdf5
     dataset_label = pathlib.Path(dataset_file).stem
     dataset_filter_attribute_range = [i for i in range(32)]
-    n_input_vecs = 1_000_000 #999994 # 9990000 deep # 60k mnist
+    n_input_vecs = 500_000 #999994 # 9990000 deep # 60k mnist
     results_file_name = results_dir / (f"{dataset_label}-{n_input_vecs}-{todays_time}.json")
     index_param_sets = [
         {
@@ -169,7 +169,7 @@ if __name__ == "__main__":
     
     # experimenter parameters
     n_repeat_runs = 1
-    verbose = True
+    verbose = False
     # exact_search_approach = "postfilter"
 
     try:
@@ -347,7 +347,8 @@ if __name__ == "__main__":
             axs[1].plot(all_recalls, all_approximate_latencies, label=filter_approach) # index_param_set["label"] if "label" in index_param_set else f"selectivity={index_param_set["a0_selectivity"]}"
             for exact_approach_name, exact_latencies in exact_latencies_by_approach.items():
                 exact_avg_latency = sum(exact_latencies) / len(exact_latencies)
-                axs[0].axhline(y=exact_avg_latency, linestyle='--', label=exact_approach_name)
+                exact_avg_filter_time = sum(exact_filter_times_by_approach[exact_approach_name]) / len(exact_filter_times_by_approach[exact_approach_name])
+                axs[0].axhline(y=exact_avg_filter_time, linestyle='--', label=exact_approach_name)
                 axs[1].axhline(y=exact_avg_latency, linestyle='--', label=exact_approach_name)
             axs[0].set_yscale('log')
             axs[1].set_yscale('log')
@@ -364,6 +365,8 @@ if __name__ == "__main__":
             ax.set_xlabel("Recall")
         todays_date = datetime.today().strftime('%Y-%m-%d')
         fig.savefig(f"../../figures/direct_figs/{todays_date}-{index_param_set["log_on"]}-{index_param_set["dataset_file"].split('.', 1)[0]}-{index_param_set["n_input_vecs"]}-recall-latency_a0{index_param_set["a0_selectivity"]}.png")
+    manager = plt.get_current_fig_manager()
+    manager.window.attributes('-zoomed', True)
     plt.show()
 
 

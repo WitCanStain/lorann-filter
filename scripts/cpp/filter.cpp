@@ -283,7 +283,8 @@ extern "C" {
             filter_attributes_int,
             exact_search_approach,
             nullptr,
-            &exact_filter_duration);
+            &exact_filter_duration,
+            verbose);
       } catch (const std::runtime_error &e) {
         std::cout << e.what() << std::endl;
         break;

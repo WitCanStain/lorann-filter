@@ -10,7 +10,7 @@ ABSL_CFLAGS := $(shell $(PKG_CONFIG) --cflags absl_hash)
 ABSL_LIBS = -Wl,--no-as-needed \
   -labsl_raw_hash_set -labsl_hashtablez_sampler  \
   -labsl_hash -labsl_city \
-  -labsl_strings -labsl_strings_internal -labsl_string_view \
+  -labsl_strings -labsl_strings_internal \
   -labsl_base -labsl_spinlock_wait -labsl_throw_delegate \
   -labsl_raw_logging_internal -labsl_log_severity -labsl_int128 \
   -Wl,--as-needed

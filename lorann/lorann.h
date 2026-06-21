@@ -393,32 +393,10 @@ class Lorann : public LorannBase {
       
       /* compute r = s^T B */
       if (use_attr_indexing) {
-        const auto& idxs = *cluster_attribute_data_idxs_ptr;
-        const int rows = B.rows();
-        const int new_cols = idxs.size();
-        ColMatrixUInt8 B_reduced(rows, new_cols);
-        const size_t col_bytes = rows * sizeof(uint8_t);
-        Vector correction_reduced(2 * new_cols);
-        for (int i = 0; i < new_cols; ++i) {
-          int idx = idxs[i];
-          correction_reduced[i] = B_correction[idx];             // scale
-          correction_reduced[i + new_cols] = B_correction[idx + B.cols()];  // fix
-          std::memcpy(
-              B_reduced.data() + i * rows,
-              B.data() + idx * rows,
-              col_bytes
-          );
-        }
-        
-        quant_data.quantized_matvec_product_B(B_reduced, quantized_query_doubled, correction_reduced, tmpfact,
-                                                    principal_axis_tmp, compensation_tmp,
-                                                    &all_distances[current_cumulative_size]);
-        
-        
-        // quant_data.quantized_matvec_product_B_filter(B, quantized_query_doubled, cluster_attribute_data_idxs_ptr, B_correction, tmpfact,
-        //                                             principal_axis_tmp, compensation_tmp,
-        //                                             &all_distances[current_cumulative_size], verbose);
-        
+        quant_data.quantized_matvec_product_B_filter(B, quantized_query_doubled, cluster_attribute_data_idxs_ptr,
+                                                     B_correction, tmpfact,
+                                                     principal_axis_tmp, compensation_tmp,
+                                                     &all_distances[current_cumulative_size]);
       } else {
         quant_data.quantized_matvec_product_B(B, quantized_query_doubled, B_correction, tmpfact,
                                                     principal_axis_tmp, compensation_tmp,

@@ -147,7 +147,7 @@ class LorannBase {
    * @param out The index output array of length k
    * @param dist_out The (optional) distance output array of length k
    */
-  void exact_search(const float *q, int k, int *out, const attribute_set& filter_attributes, uint32_t filter_attributes_int,std::string filter_approach, float *dist_out = nullptr, std::chrono::microseconds *filter_duration = nullptr) const {
+  void exact_search(const float *q, int k, int *out, const attribute_set& filter_attributes, uint32_t filter_attributes_int,std::string filter_approach, float *dist_out = nullptr, std::chrono::microseconds *filter_duration = nullptr, bool verbose=false) const {
     float *data_ptr = _data;
     int n_datapoints;
     std::vector<int> attribute_data_idxs;
@@ -171,13 +171,6 @@ class LorannBase {
       for (int i = 0; i < attribute_idx.size(); ++i) { // for each data point in the smallest index which the datapoints belong to, check if the data point has the other filter attributes as well, if yes then add to filtered list.
         int true_idx = attribute_idx[i];
         bool filters_match = _attributes.matches_int(true_idx, filter_attributes);
-        // bool filters_match = (_attributes[true_idx] & filter_attributes) == filter_attributes;
-        // for (const auto& attr: filter_attributes) {
-        //   if (!_attributes[true_idx].count(attr)) {
-        //     filters_match = false;
-        //     break;
-        //   }
-        // }
         if (filters_match) {
           attribute_data_idxs.push_back(true_idx);
         }
@@ -249,7 +242,10 @@ class LorannBase {
       int matched_k = matched_idxs.size();
       int new_k = k;
       std::vector<std::vector<int>*> ptr_vec;
+      int i = 1;
+      auto start_filter_loop = std::chrono::high_resolution_clock::now();
       while (matched_k < k) { // if not enough datapoints are found in k results, double it and search again
+        ++i;
         new_k = new_k * 2 > _n_samples ? _n_samples : new_k * 2;
         Eigen::VectorXi new_out(new_k);
         matched_idxs.clear();
@@ -267,6 +263,10 @@ class LorannBase {
           break;
         }
       }
+      auto end_filter_loop = std::chrono::high_resolution_clock::now();
+      auto duration_filter_loop = std::chrono::duration_cast<std::chrono::microseconds>(end_filter_loop - start_filter_loop);
+      if (verbose) std::cout << "postfilter loop duration: " << duration_filter_loop.count() << " microseconds" << std::endl;
+      if (verbose) std::cout << "exact postfilter i: " << i << " matched_k: " << matched_k << std::endl;
       auto stop_filter = std::chrono::high_resolution_clock::now();
       duration_filter = std::chrono::duration_cast<std::chrono::microseconds>(stop_filter - start_filter);
       if (matched_k >= k) {

@@ -137,8 +137,18 @@ class Lorann : public LorannBase {
     ColVector all_distances(allocate_pts);
     ColVectorInt all_idxs(allocate_pts); // all_idxs contains the original indexes of all resultant datapoints from the query
     ColVector tmp(_max_rank);
-
-    
+    // Pre-allocate reusable buffers for the B gather step to avoid per-cluster heap allocations
+    int B_rows_prealloc = 0;
+    if (use_attr_indexing) {
+      for (int ci = 0; ci < n_clusters; ++ci) {
+        if (_cluster_sizes[ci] > 0) { B_rows_prealloc = _B[ci].rows(); break; }
+      }
+    }
+    const int max_cluster_sz = _cluster_sizes.maxCoeff();
+    std::vector<uint8_t> B_reduced_buf(
+        (use_attr_indexing && B_rows_prealloc > 0) ? (size_t)B_rows_prealloc * max_cluster_sz : 0);
+    Vector correction_reduced(
+        (use_attr_indexing && max_cluster_sz > 0) ? 2 * max_cluster_sz : 0);
 
     int current_cumulative_size = 0;
     int total_smallest_idx_sizes = 0; // temporary, remove
@@ -181,47 +191,7 @@ class Lorann : public LorannBase {
       std::vector<int>* cluster_attribute_data_idxs_ptr;
       int n_filtered_cluster_datapoints = 0;
       auto start_filter = std::chrono::high_resolution_clock::now();
-      if (filter_approach == "indexing") {
-        auto start_preloop = std::chrono::high_resolution_clock::now();
-        attribute_data_map& this_cluster_attribute_data_map = _cluster_attribute_data_maps[cluster];
-        attribute_data_map& this_cluster_reverse_index_map = _cluster_reverse_index_maps[cluster];
-        attribute_set smallest_idx;
-        // smallest_idx.init(1, _n_attributes);
-        int smallest_idx_size = _n_samples;
-        for (int attr = 0; attr < _n_attributes; ++attr) {
-          if (is_bit_set(filter_attributes_int, attr)) {
-            attribute_set& attr_set = _attribute_index_map[attr];
-            int attr_idx_size = this_cluster_attribute_data_map[attr_set].size();
-            if (attr_idx_size <= smallest_idx_size) {
-              smallest_idx = attr_set;
-              smallest_idx_size = this_cluster_attribute_data_map[attr_set].size();
-            }
-          }
-        }
-        std::vector<int>& attribute_idx = this_cluster_attribute_data_map[smallest_idx];
-        std::vector<int>& reverse_index = this_cluster_reverse_index_map[smallest_idx];
-        
-        attribute_data_idxs.reserve(attribute_idx.size());
-        cluster_attribute_data_idxs.reserve(attribute_idx.size());
-        attribute_data_idxs_ptr = &attribute_data_idxs;
-        cluster_attribute_data_idxs_ptr = &cluster_attribute_data_idxs;
-        total_smallest_idx_sizes += attribute_idx.size();
-        auto stop_preloop = std::chrono::high_resolution_clock::now();
-        auto start_indexing = std::chrono::high_resolution_clock::now();
-        for (int i = 0; i < attribute_idx.size(); ++i) { // for each data point in the smallest index which the datapoints belong to, check if the data point has the other filter attributes as well, if yes then add to filtered list.
-          bool filters_match = _attributes.matches_int(attribute_idx[i], filter_attributes_int);
-          if (filters_match) {
-            attribute_data_idxs.push_back(attribute_idx[i]);
-            cluster_attribute_data_idxs.push_back(reverse_index[i]); // Need a REVERSE INDEX - mapping points of attribute_idx to the cluster point indices.
-          }
-        }
-        n_filtered_cluster_datapoints = attribute_data_idxs_ptr->size();
-        auto stop_indexing = std::chrono::high_resolution_clock::now();
-        auto duration_indexing = std::chrono::duration_cast<std::chrono::nanoseconds>(stop_indexing - start_indexing);
-        total_indexing_duration += duration_indexing;
-        auto duration_preloop = std::chrono::duration_cast<std::chrono::nanoseconds>(stop_preloop - start_preloop);
-        total_filter_preloop_duration += duration_preloop;
-      } if (filter_approach == "indexing_avx") {
+      if (filter_approach == "indexing_avx") {
         auto start_indexing = std::chrono::high_resolution_clock::now();
         auto start_preloop = std::chrono::high_resolution_clock::now();
         int32_attribute_data_map& this_cluster_attribute_int_data_map = _cluster_attribute_int_data_maps[cluster];
@@ -352,24 +322,6 @@ class Lorann : public LorannBase {
         auto stop_hybrid_avx = std::chrono::high_resolution_clock::now();
         auto duration_hybrid_avx = std::chrono::duration_cast<std::chrono::microseconds>(stop_hybrid_avx - start_hybrid_avx);
         total_hybrid_avx_duration += duration_hybrid_avx;
-      } else if (filter_approach == "hybrid") {
-        auto start_hybrid = std::chrono::high_resolution_clock::now();
-        cluster_attribute_data_idxs.reserve(sz);
-        attribute_data_idxs.reserve(sz);
-        attribute_data_idxs_ptr = &attribute_data_idxs;
-        cluster_attribute_data_idxs_ptr = &cluster_attribute_data_idxs;
-        const std::vector<int>& this_cluster = _cluster_map[cluster];
-        for (int i = 0; i < sz; ++i) {
-          bool filters_match = _attributes.matches_int(this_cluster[i], filter_attributes_int);
-          if (filters_match) {
-            attribute_data_idxs_ptr->push_back(this_cluster[i]);
-            cluster_attribute_data_idxs_ptr->push_back(i);
-          }
-        }
-        n_filtered_cluster_datapoints = attribute_data_idxs_ptr->size();
-        auto stop_hybrid = std::chrono::high_resolution_clock::now();
-        auto duration_hybrid = std::chrono::duration_cast<std::chrono::microseconds>(stop_hybrid - start_hybrid);
-        total_hybrid_duration += duration_hybrid;
       }
       auto stop_filter = std::chrono::high_resolution_clock::now();
       cumulative_found_points += n_filtered_cluster_datapoints;
@@ -393,10 +345,33 @@ class Lorann : public LorannBase {
       
       /* compute r = s^T B */
       if (use_attr_indexing) {
-        quant_data.quantized_matvec_product_B_filter(B, quantized_query_doubled, cluster_attribute_data_idxs_ptr,
-                                                     B_correction, tmpfact,
-                                                     principal_axis_tmp, compensation_tmp,
-                                                     &all_distances[current_cumulative_size]);
+        const auto& idxs = *cluster_attribute_data_idxs_ptr;
+        const int rows = B.rows();
+        const int new_cols = idxs.size();
+        // Gather selected columns into the pre-allocated contiguous buffer
+        Eigen::Map<ColMatrixUInt8> B_reduced(B_reduced_buf.data(), rows, new_cols);
+        const size_t col_bytes = rows * sizeof(uint8_t);
+        for (int i = 0; i < new_cols; ++i) {
+          int idx = idxs[i];
+          correction_reduced[i] = B_correction[idx];             // scale
+          correction_reduced[i + new_cols] = B_correction[idx + B.cols()];  // fix
+          std::memcpy(
+              B_reduced_buf.data() + i * rows,
+              B.data() + idx * rows,
+              col_bytes
+          );
+        }
+        
+        quant_data.quantized_matvec_product_B(B_reduced, quantized_query_doubled,
+                                              correction_reduced.head(2 * new_cols), tmpfact,
+                                                    principal_axis_tmp, compensation_tmp,
+                                                    &all_distances[current_cumulative_size]);
+        
+        
+        // quant_data.quantized_matvec_product_B_filter(B, quantized_query_doubled, cluster_attribute_data_idxs_ptr, B_correction, tmpfact,
+        //                                             principal_axis_tmp, compensation_tmp,
+        //                                             &all_distances[current_cumulative_size], verbose);
+        
       } else {
         quant_data.quantized_matvec_product_B(B, quantized_query_doubled, B_correction, tmpfact,
                                                     principal_axis_tmp, compensation_tmp,

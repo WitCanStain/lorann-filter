@@ -72,7 +72,7 @@ if __name__ == "__main__":
     dataset_file = "gist-960-euclidean.hdf5" #"gist-960-euclidean.hdf5" #"fashion-mnist-784-euclidean.hdf5" nytimes-256-angular.hdf5 deep-image-96-angular.hdf5
     dataset_label = pathlib.Path(dataset_file).stem
     dataset_filter_attribute_range = [i for i in range(32)]
-    n_input_vecs = 500_000 #999994 # 9990000 deep # 60k mnist
+    n_input_vecs = 1_000_000 #999994 # 9990000 deep # 60k mnist
     results_file_name = results_dir / (f"{dataset_label}-{n_input_vecs}-{todays_time}.json")
     index_param_sets = [
         {
@@ -129,7 +129,7 @@ if __name__ == "__main__":
         index_param_set = {
             "dataset_filter_attributes": np.array(dataset_filter_attribute_range, dtype=np.int32),
             "n_attributes_per_datapoint": 32,
-            "n_attr_idx_partitions": 10,
+            "n_attr_idx_partitions": 32,
             "n_input_vecs": n_input_vecs,
             "n_clusters": n_clusters,
             "global_dim": 256,
@@ -233,9 +233,9 @@ if __name__ == "__main__":
                     "points_to_rerank": 2000,
                     "k": 10,
                     "M": initial_M + math.ceil(i * M_increment * 100 * index_param_set["a0_selectivity"]) if filter_approach != "postfilter" else -1, # * 100 * index_param_set["a0_selectivity"]
-                    "filter_attributes": [0],
+                    "filter_attributes": [0, 10, 20],
                     "filter_approach": filter_approach,
-                    "exact_search_approach": "postfilter" if i == 0 else "prefilter_avx",
+                    "exact_search_approach": "postfilter" if i == 0 else "indexing_avx_intersect" if i == 1 else "prefilter_avx",
                     "n_repeat_runs": 1,
                     "query_indices": query_indices,
                     "label": filter_approach

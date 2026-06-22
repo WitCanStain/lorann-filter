@@ -196,6 +196,42 @@ class LorannBase {
       n_datapoints = attribute_data_idxs.size();
       auto stop_filter = std::chrono::high_resolution_clock::now();
       duration_filter = std::chrono::duration_cast<std::chrono::microseconds>(stop_filter - start_filter);
+    } else if (filter_approach == "indexing_avx_intersect") {
+      auto start_filter = std::chrono::high_resolution_clock::now();
+      // Find the partition (per-attribute index) with the fewest candidates
+      attribute_set best_partition = 0;
+      int smallest_size = _n_samples + 1;
+      for (int attr = 0; attr < (int)_n_attributes; ++attr) {
+        if (is_bit_set(filter_attributes_int, attr)) {
+          auto it = _attribute_index_map.find(attr);
+          if (it == _attribute_index_map.end()) continue;
+          attribute_set partition_key = it->second;
+          auto dit = _attribute_data_map.find(partition_key);
+          if (dit == _attribute_data_map.end()) continue;
+          int sz = (int)dit->second.size();
+          if (sz < smallest_size) {
+            smallest_size = sz;
+            best_partition = partition_key;
+          }
+        }
+      }
+      // AVX subset-match over the attribute integers of the best partition,
+      // checking all filter bits simultaneously (intersection)
+      const std::vector<int>& partition_idxs = _attribute_data_map[best_partition];
+      const std::vector<uint32_t>& partition_attr_ints = _attribute_int_data_map[best_partition];
+      int partition_size = (int)partition_idxs.size();
+      std::vector<uint16_t> avx_masks((partition_size + 15) >> 4);
+      int num_blocks = build_subset_masks_avx512(
+          partition_attr_ints.data(), partition_size, filter_attributes_int, avx_masks.data());
+      std::vector<int> local_hits;
+      iterate_hits_from_masks(avx_masks.data(), num_blocks, local_hits);
+      attribute_data_idxs.reserve(local_hits.size());
+      for (int local_idx : local_hits) {
+        attribute_data_idxs.push_back(partition_idxs[local_idx]);
+      }
+      n_datapoints = (int)attribute_data_idxs.size();
+      auto stop_filter = std::chrono::high_resolution_clock::now();
+      duration_filter = std::chrono::duration_cast<std::chrono::microseconds>(stop_filter - start_filter);
     } else if (filter_approach == "postfilter") {
       n_datapoints = _n_samples;
     } else {

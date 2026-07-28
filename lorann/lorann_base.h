@@ -166,17 +166,23 @@ class LorannBase {
           }
         }
       }
-      std::vector<int>& attribute_idx = _attribute_data_map[smallest_idx];
-      attribute_data_idxs.reserve(attribute_idx.size());
-      for (int i = 0; i < attribute_idx.size(); ++i) { // for each data point in the smallest index which the datapoints belong to, check if the data point has the other filter attributes as well, if yes then add to filtered list.
-        int true_idx = attribute_idx[i];
-        bool filters_match = _attributes.matches_int(true_idx, filter_attributes);
-        if (filters_match) {
-          attribute_data_idxs.push_back(true_idx);
+      const std::vector<int>& partition_idxs = _attribute_data_map[smallest_idx];
+      const std::vector<uint32_t>& partition_attr_ints = _attribute_int_data_map[smallest_idx];
+      int partition_size = (int)partition_idxs.size();
+      std::vector<uint16_t> avx_masks((partition_size + 15) >> 4);
+      int num_blocks = build_subset_masks_avx512(
+          partition_attr_ints.data(), partition_size, filter_attributes_int, avx_masks.data());
+      for (size_t b = 0; b < (size_t)num_blocks; ++b) {
+        unsigned mm = avx_masks[b];
+        int base = b << 4;
+        while (mm) {
+          unsigned local_i = __builtin_ctz(mm);
+          mm &= mm - 1;
+          attribute_data_idxs.push_back(partition_idxs[base + local_i]);
         }
       }
       // attribute_data_idxs = _attribute_data_map[filter_attributes];
-      n_datapoints = attribute_data_idxs.size();
+      n_datapoints = (int)attribute_data_idxs.size();
       auto stop_filter = std::chrono::high_resolution_clock::now();
       duration_filter = std::chrono::duration_cast<std::chrono::microseconds>(stop_filter - start_filter);
     } else if (filter_approach == "prefilter") {

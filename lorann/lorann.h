@@ -343,7 +343,6 @@ class Lorann : public LorannBase {
       const float compensation_tmp =
           quantized_query_doubled.cast<float>().sum() * quant_data.compensation_factor;
       
-      /* compute r = s^T B */
       if (use_attr_indexing) {
         const auto& idxs = *cluster_attribute_data_idxs_ptr;
         const int rows = B.rows();
@@ -361,7 +360,7 @@ class Lorann : public LorannBase {
               col_bytes
           );
         }
-        
+        /* compute r = s^T B */
         quant_data.quantized_matvec_product_B(B_reduced, quantized_query_doubled,
                                               correction_reduced.head(2 * new_cols), tmpfact,
                                                     principal_axis_tmp, compensation_tmp,
@@ -405,10 +404,9 @@ class Lorann : public LorannBase {
           std::memcpy(&all_idxs[current_cumulative_size], _cluster_map[cluster].data(), sz * sizeof(uint32_t));
         current_cumulative_size += sz;
       }
-      // std::cout << "after memcpy" << std::endl;
     }
     auto stop_clusters = std::chrono::high_resolution_clock::now();
-    auto duration_filter = std::chrono::duration_cast<std::chrono::nanoseconds>(stop_clusters - start_clusters);
+    auto duration_filter = total_duration_filterapproach; // std::chrono::duration_cast<std::chrono::nanoseconds>(stop_clusters - start_clusters);
     // if (filter_approach != "postfilter") std::cout << "cumulative_cluster_size ratio: " << ((double) current_cumulative_size) / cumulative_cluster_size << std::endl;
     // std::cout << "cluster search stopped after " << i << " clusters searched" << std::endl;
     // std::cout << "duration_filter: " << duration_filter.count() << " nanoseconds for " << filter_approach << std::endl;
@@ -479,7 +477,7 @@ class Lorann : public LorannBase {
           break;
         }
       }
-      // std::cout << "Repeated postfilter search " << i << " times" << std::endl;
+      if (verbose) std::cout << "Repeated postfilter search " << i << " times" << std::endl;
       if (verbose) std::cout << "final k: " << new_k << std::endl;
       if (matched_k >= k) {
         for (int i = 0; i < k; ++i) {
@@ -497,9 +495,13 @@ class Lorann : public LorannBase {
     auto duration_postfilter = (stop_postfilter - start_postfilter);
     
     if (filter_approach == "postfilter" || filter_approach == "mixed") {
-      // std::cout << "duration_filter: " << std::chrono::duration_cast<std::chrono::microseconds>(duration_filter).count() << " microseconds for " << filter_approach << std::endl;
-      // std::cout << "duration_postfilter: " << std::chrono::duration_cast<std::chrono::microseconds>(duration_postfilter).count() << " microseconds for " << filter_approach << std::endl;
-      duration_filter += duration_postfilter;
+       if (verbose) std::cout << "duration_filter: " << std::chrono::duration_cast<std::chrono::microseconds>(duration_filter).count() << " microseconds for " << filter_approach << std::endl;
+      if (verbose) std::cout << "duration_postfilter: " << std::chrono::duration_cast<std::chrono::microseconds>(duration_postfilter).count() << " microseconds for " << filter_approach << std::endl;
+      if (filter_approach == "postfilter") {
+        duration_filter = duration_postfilter;
+      } else {
+        duration_filter += duration_postfilter;
+      }
     }
     if (duration) *duration = std::chrono::duration_cast<std::chrono::microseconds>(duration_filter);
   }

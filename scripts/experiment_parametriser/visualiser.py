@@ -5,10 +5,16 @@ import math
 import re
 from pathlib import Path
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator, LogLocator, LogFormatterSciNotation
+from matplotlib.ticker import MaxNLocator, LogLocator, LogFormatterSciNotation, SymmetricalLogLocator, FuncFormatter
 
-subplots_horizontal = 3
-subplots_vertical = 1
+subplots_horizontal = 2
+subplots_vertical = 3
+
+# A4 portrait in inches (width x height).
+# Increase this scale slightly if labels are still too small in exported figures.
+a4_scale = 1.15
+A4_WIDTH_IN = 8.27 * a4_scale
+A4_HEIGHT_IN = 11.69 * a4_scale
 
 # Toggle log scaling for latency plots: set True to use log scale
 use_log_scale = True
@@ -18,10 +24,12 @@ log_axis = 'y'
 show_exact_lines = True
 save_figures = False
 # Set this to a filename inside results/ to override the automatic latest-file selection.
-results_filename_override = None
+results_filename_override = "nytimes-256-angular-290000-2026-07-02 17:28:38.json"
 
 repo_root = Path(__file__).resolve().parents[2]
 results_dir = repo_root / "results"
+# prefix = "deep-image-96-angular"  # the string to match
+
 
 
 def extract_timestamp_from_filename(path):
@@ -53,8 +61,6 @@ def select_results_file(results_directory, override_filename=None):
 
     return max(candidate_paths, key=lambda path: path.stat().st_mtime)
 
-
-prefix = "deep"  # the string to match
 results_file_path = select_results_file(results_dir, results_filename_override)
 print(f"Opened: {results_file_path}")
 with open(results_file_path, 'r', encoding='utf-8') as f:
@@ -64,11 +70,7 @@ print(len(experiment_data.keys()))
 
 filtered_keys = []
 for key in list(experiment_data.keys()):
-    index_data = json.loads(key)
-    if index_data["a0_selectivity"] == 0.1 or index_data["a0_selectivity"] == 0.9:
-        del experiment_data[key]
-    else:
-        filtered_keys.append(key)
+    filtered_keys.append(key)
 
 if not filtered_keys:
     raise SystemExit("No experiment data matched the selected prefix and filters.")
@@ -102,7 +104,12 @@ def collect_shared_log_bounds(data, metric_key, exact_data_key=None):
 
 
 def plot_metric_grid(metric_key, fig_title, file_suffix, exact_data_key=None, exact_label_suffix="exact"):
-    fig, axes = plt.subplots(subplot_rows, subplots_horizontal, figsize=(12, 4 * subplot_rows), constrained_layout=True)
+    fig, axes = plt.subplots(
+        subplot_rows,
+        subplots_horizontal,
+        figsize=(A4_WIDTH_IN, A4_HEIGHT_IN),
+        constrained_layout=True,
+    )
     plt.suptitle(fig_title, fontsize=16)
     axes = axes.flatten()
 
@@ -117,6 +124,7 @@ def plot_metric_grid(metric_key, fig_title, file_suffix, exact_data_key=None, ex
             y_values = data[filter_approach].get(metric_key, [])
             axes[i].plot(recalls, y_values, label=f"{filter_approach}")
 
+        subplot_log_bounds = None
         if show_exact_lines and exact_data_key:
             exact_latencies_by_approach = {}
             for filter_approach in filter_approaches:
@@ -142,23 +150,36 @@ def plot_metric_grid(metric_key, fig_title, file_suffix, exact_data_key=None, ex
         axes[i].set_title(f"{index_data['a0_selectivity']:.2f} Selectivity")
         axes[i].tick_params(axis='y', labelrotation=45)
         axes[i].legend(loc='best', fontsize='x-small', handlelength=2, borderpad=0.2, labelspacing=0.2, handletextpad=0.4, framealpha=0.7)
-        labelLines(axes[i].get_lines(), align=False)
+
+        # Values below this threshold are shown on a linear scale so the curves
+        # remain visible near zero instead of being squashed against the axis.
+        linthresh = subplot_log_bounds[0] if subplot_log_bounds else 1e-2
 
         if use_log_scale:
             if log_axis in ('y', 'both'):
-                axes[i].set_yscale('log')
+                # axes[i].set_yscale('log')
+                axes[i].set_yscale('symlog', linthresh=linthresh, linscale=1.0)
+                # axes[i].set_ylim(bottom=1e-3)  # Set a minimum y-limit to avoid issues with log scale
+                axes[i].margins(y=0.5)
             if log_axis in ('x', 'both'):
                 axes[i].set_xscale('log')
         try:
             if use_log_scale and log_axis in ('y', 'both'):
-                if subplot_log_bounds:
-                    axes[i].set_ylim(subplot_log_bounds)
-                axes[i].yaxis.set_major_locator(LogLocator(base=10.0, subs=(1.0,), numticks=12))
-                axes[i].yaxis.set_major_formatter(LogFormatterSciNotation(base=10.0, labelOnlyBase=True))
+                top_bound = subplot_log_bounds[1] if subplot_log_bounds else None
+                axes[i].set_ylim(bottom=0, top=top_bound)
+                axes[i].yaxis.set_major_locator(SymmetricalLogLocator(base=10.0, linthresh=linthresh))
+                base_formatter = LogFormatterSciNotation(base=10.0, labelOnlyBase=True)
+                axes[i].yaxis.set_major_formatter(
+                    FuncFormatter(lambda y, pos, bf=base_formatter: "0" if y == 0 else bf(y, pos))
+                )
             else:
+                axes[i].set_ylim(bottom=0)
                 axes[i].yaxis.set_major_locator(MaxNLocator(nbins=6))
         except Exception:
             pass
+        
+        labelLines(axes[i].get_lines(), align=False)
+        
 
     if save_figures:
         fig.savefig(f"../../figures/{subplots_vertical}x{subplots_horizontal}-{dataset_label}-{file_suffix}.png")
@@ -178,7 +199,7 @@ dataset_label = get_dataset_label(experiment_data)
 
 approx_fig = plot_metric_grid(
     metric_key="approximate_latencies",
-    fig_title=f"Approximate Search Latency ({n_input_vecs} points), {dataset_label}",
+    fig_title=f"Search Latency ({n_input_vecs} points), {dataset_label}",
     file_suffix="approximate-recall-latency_matrix",
     exact_data_key="exact_latencies_by_approach",
     exact_label_suffix="exact",
@@ -186,10 +207,10 @@ approx_fig = plot_metric_grid(
 
 filter_fig = plot_metric_grid(
     metric_key="filter_times",
-    fig_title=f"Filter Time ({n_input_vecs} points), {dataset_label}",
+    fig_title=f"Filter Latency ({n_input_vecs} points), {dataset_label}",
     file_suffix="filtertime-recall-latency_matrix",
     exact_data_key="exact_filter_times_by_approach",
     exact_label_suffix="exact filter",
 )
-
+# plt.tight_layout()
 plt.show()
